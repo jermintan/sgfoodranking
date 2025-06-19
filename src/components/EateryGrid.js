@@ -74,10 +74,18 @@ const EateryGrid = () => {
     }
 
     switch (sortOrder) {
-      case 'rating': eateriesToShow.sort((a, b) => b.rating - a.rating); break;
-      case 'reviews': eateriesToShow.sort((a, b) => b.reviewCount - a.reviewCount); break;
-      case 'name': eateriesToShow.sort((a, b) => a.name.localeCompare(b.name)); break;
-      default: break;
+      case 'rating':
+        eateriesToShow.sort((a, b) => b.rating - a.rating);
+        break;
+      case 'reviews':
+        // FIX #5: Change reviewCount to review_count
+        eateriesToShow.sort((a, b) => b.review_count - a.review_count);
+        break;
+      case 'name':
+        eateriesToShow.sort((a, b) => a.name.localeCompare(b.name));
+        break;
+      default:
+        break;
     }
     return eateriesToShow;
   }, [allEateries, activeFilters, searchTerm, sortOrder]);

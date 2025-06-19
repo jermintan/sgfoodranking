@@ -73,12 +73,14 @@ body {
   gap: 16px;
   /* Remove borders or shadows for a cleaner, inline look */
 }
-.card-image-container {
-  width: 160px;
-  height: 160px;
+.card-image-bg {
+  width: 100px;
+  height: 100px;
   flex-shrink: 0;
   border-radius: 8px;
-  overflow: hidden;
+  background-color: #f0f0f0; /* A light grey fallback for broken links */
+  background-size: cover;      /* This makes the image fill the container */
+  background-position: center; /* This centers the image */
 }
 .card-image {
   width: 100%;
