@@ -2,19 +2,18 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 
 const ListingCard = ({ eatery }) => {
-  // --- THE FIX IS HERE ---
-  // We construct a URL to our OWN backend proxy, passing the real image URL as a query parameter.
-  // We must encode the Google URL to ensure it's passed correctly.
-  const proxyImageUrl = `http://localhost:3001/api/image?url=${encodeURIComponent(eatery.image_url)}`;
-
   return (
+    // We can simplify this back to a regular div, as the Link can wrap it in EateryGrid.js
+    // Or keep it as a link, let's keep it for now.
     <Link to={`/eatery/${eatery.id}`} className="listing-card-link">
       <div className="listing-card">
+        {/* --- THE MAJOR CHANGE IS HERE --- */}
+        {/* Instead of an <img> tag, we use a div with a background image */}
         <div 
           className="card-image-bg" 
-          // We now use our new proxy URL for the background image
-          style={{ backgroundImage: `url(${proxyImageUrl})` }}
+          style={{ backgroundImage: `url(${eatery.image_url})` }}
         >
+          {/* This div acts as a container for the image */}
         </div>
         <div className="card-details">
           <h3 className="card-title">{eatery.name}</h3>

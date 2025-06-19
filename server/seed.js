@@ -17,9 +17,6 @@ const pool = new Pool({
 const API_KEY = process.env.GOOGLE_MAPS_API_KEY;
 const PLACES_API_URL = 'https://maps.googleapis.com/maps/api/place/textsearch/json';
 
-// --- NEW: THE MULTI-PRONGED SEARCH STRATEGY ---
-// We define a list of search objects. This gives us fine-grained control.
-// We can specify how many pages of results we want for each specific query.
 const searchStrategies = [
   { query: 'best chicken rice in Singapore', pages: 1 },
   { query: 'best laksa in Singapore', pages: 1 },
@@ -30,74 +27,82 @@ const searchStrategies = [
   { query: 'best bars in Singapore', pages: 1 },
 ];
 
-// A helper function to pause execution
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// --- NEW HELPER FUNCTION TO GET THE FINAL IMAGE URL ---
+async function getFinalImageUrl(place) {
+  if (!place.photos || place.photos.length === 0) {
+    return 'https://via.placeholder.com/400x400.png?text=No+Image';
+  }
+
+  const photo_reference = place.photos[0].photo_reference;
+  const photoApiUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${photo_reference}&key=${API_KEY}`;
+  
+  try {
+    const photoResponse = await axios.get(photoApiUrl, { responseType: 'stream' });
+    return photoResponse.request.res.responseUrl;
+  } catch (error) {
+    console.error(`Could not fetch photo for ${place.name}. Using default.`);
+    return 'https://via.placeholder.com/400x400.png?text=No+Image';
+  }
+}
 
 async function seedDatabase() {
   console.log('Starting to seed the database...');
   const client = await pool.connect();
 
   try {
-    // --- Outer loop to iterate through each search STRATEGY ---
     for (const strategy of searchStrategies) {
       console.log(`\n\n--- Processing new strategy: "${strategy.query}" ---`);
       
       let nextPageToken = null;
       let pageCount = 0;
 
-      // --- PAGINATION LOGIC (Now nested inside the strategy loop) ---
       do {
         pageCount++;
         console.log(` -> Fetching Page ${pageCount} for "${strategy.query}"...`);
         
-        const params = {
-          query: strategy.query,
-          key: API_KEY,
-        };
-
-        if (nextPageToken) {
-          params.pagetoken = nextPageToken;
-        }
+        const params = { query: strategy.query, key: API_KEY };
+        if (nextPageToken) params.pagetoken = nextPageToken;
         
         const searchResponse = await axios.get(PLACES_API_URL, { params });
         const places = searchResponse.data.results;
         nextPageToken = searchResponse.data.next_page_token;
         
-        console.log(`  -> Found ${places.length} places on this page.`);
+        console.log(`  -> Found ${places.length} places on this page. Preparing to process...`);
 
-        // --- Process each place from the current page ---
-        for (const place of places) {
-            let image_url = 'https://via.placeholder.com/400x400.png?text=No+Image';
+        // --- THE MAJOR FIX: Use Promise.all ---
+        const eateryDataPromises = places.map(async (place) => {
+          const imageUrl = await getFinalImageUrl(place);
+          return {
+            name: place.name,
+            cuisine: place.types[0]?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Restaurant',
+            neighbourhood: place.formatted_address.split(',')[1]?.trim() || 'Singapore',
+            rating: place.rating || 0,
+            review_count: place.user_ratings_total || 0,
+            price: '$'.repeat(place.price_level || 1),
+            image_url: imageUrl,
+            latitude: place.geometry.location.lat,
+            longitude: place.geometry.location.lng,
+          };
+        });
 
-            if (place.photos && place.photos.length > 0) {
-                const photo_reference = place.photos[0].photo_reference;
-                const photoApiUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${photo_reference}&key=${API_KEY}`;
-                try {
-                    const photoResponse = await axios.get(photoApiUrl, { responseType: 'stream' });
-                    image_url = photoResponse.request.res.responseUrl;
-                } catch (photoError) { /* Silently use fallback */ }
-            }
+        // Wait for all the image URLs and data processing to complete for this page
+        const eateriesToInsert = await Promise.all(eateryDataPromises);
 
-            const name = place.name;
-            const rating = place.rating || 0;
-            const review_count = place.user_ratings_total || 0;
-            const price_level = place.price_level || 1;
-            const price = '$'.repeat(price_level);
-            // We still use a simplified neighborhood logic for now
-            const neighbourhood = place.formatted_address.split(',')[1]?.trim() || 'Singapore';
-            // And a simplified cuisine logic
-            const cuisine = place.types[0]?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Restaurant';
-
-            const insertQuery = `
-              INSERT INTO public.eateries (name, cuisine, neighbourhood, rating, review_count, price, image_url) 
-              VALUES ($1, $2, $3, $4, $5, $6, $7)
-              ON CONFLICT (name) DO NOTHING;
-            `;
-            const values = [name, cuisine, neighbourhood, rating, review_count, price, image_url];
-            await client.query(insertQuery, values);
+        // Now, loop through the fully prepared data and insert it
+        for (const eatery of eateriesToInsert) {
+          const insertQuery = `
+            INSERT INTO public.eateries (name, cuisine, neighbourhood, rating, review_count, price, image_url, latitude, longitude) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            ON CONFLICT (name) DO NOTHING;
+          `;
+          const values = [eatery.name, eatery.cuisine, eatery.neighbourhood, eatery.rating, eatery.review_count, eatery.price, eatery.image_url, eatery.latitude, eatery.longitude];
+          await client.query(insertQuery, values);
         }
+        console.log(`  -> Finished processing and inserting ${eateriesToInsert.length} places for this page.`);
 
-        if (nextPageToken) {
+        if (nextPageToken && pageCount < strategy.pages) {
           console.log("  -> Waiting 2 seconds before next page...");
           await delay(2000);
         }
@@ -108,12 +113,11 @@ async function seedDatabase() {
     console.log('\n\n--- All strategies processed. Database seeding completed successfully! ---');
 
   } catch (error) {
-    console.error('An error occurred during seeding:', error.response ? error.response.data : error.message);
+    console.error('An error occurred during seeding:', error.message);
   } finally {
     client.release();
     await pool.end();
   }
 }
 
-// Run the main function
 seedDatabase();
