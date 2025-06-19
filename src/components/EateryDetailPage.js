@@ -18,7 +18,7 @@ const EateryDetailPage = () => {
       setError(null);
 
       try {
-        const response = await fetch(`http://localhost:3001/api/eateries/${id}`);
+        const response = await fetch(`${process.env.REACT_APP_API_URL}/api/eateries/${id}`);
         if (!response.ok) {
           throw new Error(`Eatery not found (status: ${response.status})`);
         }
@@ -38,9 +38,6 @@ const EateryDetailPage = () => {
   // --- Dynamic URLs (no change needed here) ---
   const googleMapsUrl = eatery 
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(eatery.name + ' ' + eatery.neighbourhood)}` 
-    : '#';
-  const grabFoodUrl = eatery 
-    ? `https://food.grab.com/sg/en/restaurants?search=${encodeURIComponent(eatery.name)}`
     : '#';
 
   // --- RENDER LOGIC with proper loading and error states ---
@@ -75,9 +72,6 @@ const EateryDetailPage = () => {
           <div className="detail-actions">
             <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer" className="action-button maps-button">
               Open in Google Maps
-            </a>
-            <a href={grabFoodUrl} target="_blank" rel="noopener noreferrer" className="action-button grab-button">
-              Find on GrabFood
             </a>
           </div>
         </div>

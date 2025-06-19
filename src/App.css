@@ -287,8 +287,12 @@ body {
 .detail-image {
   width: 250px;
   height: 250px;
-  object-fit: cover;
   border-radius: 12px;
+  
+  /* --- THE FIX --- */
+  background-color: #f0f0f0;    /* A nice fallback color */
+  background-size: cover;       /* This tells the BACKGROUND to cover the area */
+  background-position: center;  /* This centers the BACKGROUND image */
 }
 .detail-title-section h1 {
   margin: 0 0 8px 0;

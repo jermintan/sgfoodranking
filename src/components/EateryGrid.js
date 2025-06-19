@@ -29,7 +29,7 @@ const EateryGrid = () => {
   useEffect(() => {
     const fetchEateries = async () => {
       try {
-        const response = await fetch('http://localhost:3001/api/eateries');
+        const response = await fetch(`${process.env.REACT_APP_API_URL}/api/eateries`);
         if (!response.ok) throw new Error('Network response was not ok');
         const data = await response.json();
         setAllEateries(data);
