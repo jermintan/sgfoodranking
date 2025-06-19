@@ -72,10 +72,10 @@ app.get('/api/image', async (req, res) => {
     });
     res.setHeader('Content-Type', response.headers['content-type']);
     response.data.pipe(res);
-  } catch (error)
+  } catch (error) { // <-- ADDED OPENING BRACE
     console.error('Image proxy error:', error.message);
     res.status(500).send('Error fetching image');
-  }
+  } // <-- ADDED CLOSING BRACE
 });
 
 // --- START SERVER ---
