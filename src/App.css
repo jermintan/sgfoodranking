@@ -374,3 +374,35 @@ body {
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* --- Detail Page Action Buttons --- */
+.detail-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.action-button {
+  display: inline-block;
+  padding: 10px 16px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 14px;
+  text-align: center;
+  transition: transform 0.1s ease-in-out;
+}
+
+.action-button:hover {
+  transform: translateY(-2px);
+}
+
+.maps-button {
+  background-color: #4285F4; /* Google's blue */
+  color: white;
+}
+
+.grab-button {
+  background-color: #00B14F; /* Grab's green */
+  color: white;
+}

@@ -1,50 +1,85 @@
-import React, { useState, useEffect } from 'react'; // <-- FIX for useState & useEffect
-import { useParams, Link } from 'react-router-dom';   // <-- FIX for useParams & Link
-import { mockEateries } from '../mockData';           // <-- FIX for mockEateries
+import React, { useState, useEffect } from 'react';
+import { useParams, Link } from 'react-router-dom';
+
+// We NO LONGER need to import mockData here!
+// import { mockEateries } from '../mockData'; 
 
 const EateryDetailPage = () => {
-  // The useParams hook reads the dynamic ':id' from the URL
   const { id } = useParams();
-
-  // This will hold the eatery data once fetched or found
   const [eatery, setEatery] = useState(null);
-  
-  // NOTE: This logic is temporary. The next step is to replace this
-  // with a real API call to fetch a single eatery from our backend.
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // --- REAL DATA FETCHING from our new backend endpoint ---
   useEffect(() => {
-    // We are finding from the old mockData for now to make the page work.
-    // A real implementation would be: fetch(`/api/eateries/${id}`)
-    const foundEatery = mockEateries.find(e => e.id === parseInt(id));
+    const fetchEateryDetails = async () => {
+      // Reset state for new loads
+      setLoading(true);
+      setError(null);
+
+      try {
+        const response = await fetch(`http://localhost:3001/api/eateries/${id}`);
+        if (!response.ok) {
+          throw new Error(`Eatery not found (status: ${response.status})`);
+        }
+        const data = await response.json();
+        setEatery(data);
+      } catch (err) {
+        console.error("Failed to fetch eatery details:", err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
     
-    // The server returns snake_case, so we need to use snake_case in our JSX.
-    // We don't need to transform the data here because the JSX is already updated.
-    // The server will provide the correct property names (`review_count`, `image_url`).
-    setEatery(foundEatery);
+    fetchEateryDetails();
+  }, [id]); // Re-run this effect if the ID in the URL changes
 
-  }, [id]);
+  // --- Dynamic URLs (no change needed here) ---
+  const googleMapsUrl = eatery 
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(eatery.name + ' ' + eatery.neighbourhood)}` 
+    : '#';
+  const grabFoodUrl = eatery 
+    ? `https://food.grab.com/sg/en/restaurants?search=${encodeURIComponent(eatery.name)}`
+    : '#';
 
-  // Handle the case where the ID is invalid and no eatery is found
-  if (!eatery) {
+  // --- RENDER LOGIC with proper loading and error states ---
+  if (loading) {
+    return <div className="detail-page-container"><h2>Loading...</h2></div>;
+  }
+
+  if (error || !eatery) {
     return (
       <div className="detail-page-container">
         <Link to="/" className="back-link">← Back to all eateries</Link>
-        <h1>Loading...</h1>
-        {/* Or "Eatery not found!" if the fetch fails */}
+        <h1>Eatery Not Found</h1>
+        <p>Sorry, we couldn't find the details for this eatery.</p>
       </div>
     );
   }
 
-  // If we found the eatery, render its details
   return (
     <div className="detail-page-container">
       <Link to="/" className="back-link">← Back to all eateries</Link>
       <div className="detail-header">
-        {/* Using snake_case to match the database schema */}
-        <img src={eatery.imageUrl} alt={eatery.name} className="detail-image" />
+        <div 
+          className="detail-image" 
+          // Use the correct snake_case property from our API
+          style={{ backgroundImage: `url(${eatery.image_url})` }}
+        ></div>
         <div className="detail-title-section">
           <h1>{eatery.name}</h1>
-          <p>{eatery.cuisine} • {eatery.neighborhood} • {eatery.price}</p>
-          <p className="detail-rating">★ {eatery.rating} ({eatery.reviewCount.toLocaleString()} reviews)</p>
+          <p>{eatery.cuisine} • {eatery.neighbourhood}</p>
+          <p className="detail-rating">★ {eatery.rating} ({eatery.review_count.toLocaleString()} reviews)</p>
+          
+          <div className="detail-actions">
+            <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer" className="action-button maps-button">
+              Open in Google Maps
+            </a>
+            <a href={grabFoodUrl} target="_blank" rel="noopener noreferrer" className="action-button grab-button">
+              Find on GrabFood
+            </a>
+          </div>
         </div>
       </div>
       <div className="detail-body">
