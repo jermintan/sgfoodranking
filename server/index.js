@@ -23,9 +23,10 @@ const connectionString = isProduction
   : `postgresql://postgres:Chal1124!@localhost:5432/eatery_app`;
 
 const pool = new Pool({
-  connectionString: connectionString,
-  // Only require SSL in production (on Render).
-  ssl: isProduction ? { rejectUnauthorized: false } : false
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false
+  }
 });
 
 // --- API ENDPOINTS ---
