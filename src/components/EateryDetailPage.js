@@ -12,13 +12,14 @@ const EateryDetailPage = () => {
 
   // --- REAL DATA FETCHING from our new backend endpoint ---
   useEffect(() => {
-    const fetchEateryDetails = async () => {
-      // Reset state for new loads
-      setLoading(true);
-      setError(null);
 
+    const API_BASE_URL = process.env.NODE_ENV === 'production' 
+    ? process.env.REACT_APP_API_URL 
+    : 'http://localhost:3001';
+    
+    const fetchEateryDetails = async () => {
       try {
-        const response = await fetch(`${process.env.REACT_APP_API_URL}/api/eateries/${id}`);
+        const response = await fetch(`${API_BASE_URL}/api/eateries/${id}`);
         if (!response.ok) {
           throw new Error(`Eatery not found (status: ${response.status})`);
         }

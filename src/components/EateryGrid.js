@@ -27,9 +27,14 @@ const EateryGrid = () => {
 
   // --- DATA FETCHING ---
   useEffect(() => {
+    // THE FIX: Define the API URL based on the environment.
+    const API_BASE_URL = process.env.NODE_ENV === 'production' 
+      ? process.env.REACT_APP_API_URL 
+      : 'http://localhost:3001';
+  
     const fetchEateries = async () => {
       try {
-        const response = await fetch(`${process.env.REACT_APP_API_URL}/api/eateries`);
+        const response = await fetch(`${API_BASE_URL}/api/eateries`); // Use the new variable
         if (!response.ok) throw new Error('Network response was not ok');
         const data = await response.json();
         setAllEateries(data);

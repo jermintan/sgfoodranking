@@ -15,6 +15,7 @@ app.use(express.json());
 
 // --- DATABASE CONNECTION ---
 // This robust setup works for both local development and production on Render.
+
 const isProduction = process.env.NODE_ENV === 'production';
 
 // Use the Render DATABASE_URL if it's in production, otherwise use local credentials.
@@ -23,10 +24,9 @@ const connectionString = isProduction
   : `postgresql://postgres:Chal1124!@localhost:5432/eatery_app`;
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false
-  }
+  connectionString: connectionString,
+  // Only require SSL in production (on Render).
+  ssl: isProduction ? { rejectUnauthorized: false } : false
 });
 
 // --- API ENDPOINTS ---

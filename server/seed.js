@@ -1,38 +1,41 @@
 // Load environment variables from our .env file.
-// This MUST be the first line of code.
 require('dotenv').config();
 
 const axios = require('axios');
 const { Pool } = require('pg');
 
 // --- DATABASE CONNECTION ---
-// This robust setup works for both local development and production on Render.
 const isProduction = process.env.NODE_ENV === 'production';
-
-// Use the Render DATABASE_URL if it's in production, otherwise use local credentials.
 const connectionString = isProduction 
   ? process.env.DATABASE_URL 
   : `postgresql://postgres:Chal1124!@localhost:5432/eatery_app`;
-
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false
-  }
+  connectionString: connectionString,
+  ssl: isProduction ? { rejectUnauthorized: false } : false
 });
 
 // --- GOOGLE MAPS API SETUP ---
 const API_KEY = process.env.GOOGLE_MAPS_API_KEY;
-const PLACES_API_URL = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json';
+// We switch back to Text Search as it's better for specific queries like dish names
+const PLACES_API_URL = 'https://maps.googleapis.com/maps/api/place/textsearch/json';
 
-// --- SEARCH CONFIGURATION ---
-const searchTypes = ['restaurant', 'cafe', 'bar', 'bakery'];
-const MAX_PAGES_PER_TYPE = 2; // Fetch 2 pages (~40 results) for each type.
+// --- NEW DISH-FIRST SEARCH STRATEGY ---
+const searchQueries = [
+  'best chicken rice Singapore',
+  'best char kway teow Singapore',
+  'best laksa Singapore',
+  'best hokkien mee Singapore',
+  'best bak chor mee Singapore',
+  'best satay Singapore',
+  'best wanton mee Singapore',
+  'best chilli crab Singapore',
+  'best nasi lemak Singapore',
+  'best roti prata Singapore'
+];
+const MAX_PAGES_PER_QUERY = 1; // Fetch 1 page (~20 results) for each dish type.
 
-// A helper function to pause execution.
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Helper function to get the final, redirected image URL from Google.
 async function getFinalImageUrl(place) {
     if (!place.photos || place.photos.length === 0) {
         return 'https://via.placeholder.com/400x400.png?text=No+Image';
@@ -48,25 +51,22 @@ async function getFinalImageUrl(place) {
     }
 }
 
-// The main function that runs the seeding process.
 async function seedDatabase() {
     console.log('Starting to seed the database...');
     const client = await pool.connect();
 
     try {
-        for (const type of searchTypes) {
-            console.log(`\n--- Processing new type: "${type}" ---`);
+        for (const query of searchQueries) {
+            console.log(`\n--- Processing new query: "${query}" ---`);
             let nextPageToken = null;
             let pageCount = 0;
 
             do {
                 pageCount++;
-                console.log(` -> Fetching Page ${pageCount} for type "${type}"...`);
+                console.log(` -> Fetching Page ${pageCount} for query "${query}"...`);
 
                 const params = {
-                    location: '1.3521,103.8198', // Central point in Singapore
-                    radius: '15000',             // 15km radius
-                    type: type,
+                    query: query,
                     key: API_KEY,
                 };
                 if (nextPageToken) params.pagetoken = nextPageToken;
@@ -75,7 +75,7 @@ async function seedDatabase() {
                 const places = searchResponse.data.results;
                 
                 if (searchResponse.data.status !== 'OK' && searchResponse.data.status !== 'ZERO_RESULTS') {
-                    console.error(`  -> API Error for type "${type}": ${searchResponse.data.status}`, searchResponse.data.error_message || '');
+                    console.error(`  -> API Error for query "${query}": ${searchResponse.data.status}`, searchResponse.data.error_message || '');
                     break; 
                 }
 
@@ -88,7 +88,7 @@ async function seedDatabase() {
                     return {
                         name: place.name,
                         cuisine: place.types[0]?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Restaurant',
-                        neighbourhood: place.vicinity || 'Singapore', // 'vicinity' is better for Nearby Search
+                        neighbourhood: place.formatted_address.split(',').slice(-2)[0]?.trim() || 'Singapore',
                         rating: place.rating || 0,
                         review_count: place.user_ratings_total || 0,
                         price: '$'.repeat(place.price_level || 1),
@@ -111,11 +111,11 @@ async function seedDatabase() {
                 }
                 console.log(`  -> Finished processing and inserting ${eateriesToInsert.length} places for this page.`);
 
-                if (nextPageToken && pageCount < MAX_PAGES_PER_TYPE) {
+                if (nextPageToken && pageCount < MAX_PAGES_PER_QUERY) {
                     console.log("  -> Waiting 2 seconds before next page...");
                     await delay(2000);
                 }
-            } while (nextPageToken && pageCount < MAX_PAGES_PER_TYPE);
+            } while (nextPageToken && pageCount < MAX_PAGES_PER_QUERY);
         }
         console.log('\n\n--- All types processed. Database seeding completed successfully! ---');
     } catch (error) {
@@ -126,5 +126,4 @@ async function seedDatabase() {
     }
 }
 
-// Run the main function.
 seedDatabase();
