@@ -459,3 +459,23 @@ body {
   margin: 0 2px;
   color: #777;
 }
+
+/* --- VERY SMALL MOBILE STYLES --- */
+@media (max-width: 480px) { /* Example for very small screens */
+  .search-bar-container {
+    flex-direction: column; /* Stack items vertically */
+    align-items: stretch; /* Make items take full width */
+  }
+
+  .search-input,
+  .sort-dropdown,
+  .filter-button {
+    width: 100%; /* Make them full width */
+    margin-bottom: 8px; /* Add some space between stacked items */
+  }
+
+  .location-icon-button {
+    align-self: flex-start; /* Or center, depending on desired look */
+    margin-bottom: 8px;
+  }
+}
