@@ -4,30 +4,55 @@
 require('dotenv').config();
 
 const express = require('express');
-const cors = require('cors');
+const cors = require('cors'); // Make sure 'cors' is installed (npm install cors)
 const { Pool } = require('pg');
-const axios = require('axios'); // Used for image proxy
+const axios = require('axios');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
-app.use(cors());
+// app.use(cors()); // We will replace this with more specific options
 app.use(express.json());
+
+
+// --- CONFIGURE CORS ---
+const allowedOrigins = [
+  'http://localhost:3000',         // For your local React dev server
+  'https://www.sgfooddirectory.com', // Your new live frontend domain (primary)
+  'https://sgfooddirectory.com',     // The root domain (secondary, good to include)
+  'https://sgfoodranking.vercel.app' // Your old Vercel frontend domain (optional)
+  // Add any other origins that need access in the future
+];
+
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl, Postman)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = `The CORS policy for this site does not allow access from the specified Origin: ${origin}`;
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
+  optionsSuccessStatus: 200 // Some legacy browsers (IE11, various SmartTVs) choke on 204
+};
+
+app.use(cors(corsOptions)); // Apply the configured CORS options
+
 
 // --- DATABASE CONNECTION for EXPRESS APP ---
 const isProductionApp = process.env.NODE_ENV === 'production';
 let appConnectionString;
 
 if (isProductionApp) {
-  // For production, use DATABASE_URL from .env (should be Render's external URL)
   appConnectionString = process.env.DATABASE_URL;
   if (!appConnectionString) {
     console.error("FATAL: DATABASE_URL not found in environment for production app.");
     process.exit(1);
   }
 } else {
-  // For LOCAL development: explicitly add sslmode=disable
   appConnectionString = `postgresql://postgres:Chal1124!@localhost:5432/eatery_app?sslmode=disable`;
 }
 
@@ -35,7 +60,6 @@ const appPoolConfig = {
   connectionString: appConnectionString,
 };
 
-// If in production (Render), ensure SSL is configured as Render requires it.
 if (isProductionApp) {
   appPoolConfig.ssl = { rejectUnauthorized: false };
 }
@@ -47,7 +71,7 @@ pool.connect((err, client, release) => {
   if (err) {
     return console.error(`Error acquiring client from pool for ${isProductionApp ? 'PRODUCTION DB' : 'LOCAL DB'} on startup:`, err.stack);
   }
-  client.query('SELECT NOW() AS now', (err, result) => { // Added alias 'now' for clarity
+  client.query('SELECT NOW() AS now', (err, result) => {
     release();
     if (err) {
       return console.error(`Error executing test query on ${isProductionApp ? 'PRODUCTION DB' : 'LOCAL DB'} on startup:`, err.stack);
@@ -55,7 +79,7 @@ pool.connect((err, client, release) => {
     if (result && result.rows && result.rows.length > 0) {
         console.log(`Successfully connected to ${isProductionApp ? 'PRODUCTION DB (Render)' : 'LOCAL DB'}. Test query result:`, result.rows[0].now);
     } else {
-        console.log(`Successfully connected to ${isProductionApp ? 'PRODUCTION DB (Render)' : 'LOCAL DB'}. Test query ran, but no rows returned (this is odd for SELECT NOW()).`);
+        console.log(`Successfully connected to ${isProductionApp ? 'PRODUCTION DB (Render)' : 'LOCAL DB'}. Test query ran, but no rows returned.`);
     }
   });
 });
@@ -63,12 +87,12 @@ pool.connect((err, client, release) => {
 
 // --- API ENDPOINTS ---
 
-// GET all eateries (NOW WITH PAGINATION)
+// GET all eateries (with pagination and server-side search)
 app.get('/api/eateries', async (req, res) => {
   try {
     const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 20; // Your current items per page
-    const { is_halal, is_vegetarian, searchTerm } = req.query; // Added searchTerm
+    const limit = parseInt(req.query.limit, 10) || 20; // Your items per page
+    const { is_halal, is_vegetarian, searchTerm } = req.query;
 
     const offset = (page - 1) * limit;
 
@@ -84,44 +108,14 @@ app.get('/api/eateries', async (req, res) => {
       conditions.push(`is_vegetarian = $${paramIndex++}`);
       queryValuesForWhere.push(true);
     }
-
-    // Add server-side search condition
-    if (searchTerm && searchTerm.trim() !== '') {
-      // Search across name, cuisine, and neighbourhood
-      // Using ILIKE for case-insensitive partial matching
-      conditions.push(
-        `(name ILIKE $${paramIndex} OR cuisine ILIKE $${paramIndex} OR neighbourhood ILIKE $${paramIndex})`
-      );
-      queryValuesForWhere.push(`%${searchTerm.trim()}%`); // Add wildcards for partial match
-      paramIndex++; // Note: paramIndex is incremented once for the group, but $${paramIndex} is used three times.
-                     // A better way for multiple fields is to use separate placeholders if the DB driver requires it,
-                     // or ensure the driver correctly handles repeated placeholders for the same value.
-                     // For simplicity here, we assume the driver handles it or you'd adjust.
-                     // A SAFER WAY for multiple ILIKEs on the same term:
-      // conditions.push(
-      //   `(name ILIKE $${paramIndex++} OR cuisine ILIKE $${paramIndex++} OR neighbourhood ILIKE $${paramIndex++})`
-      // );
-      // queryValuesForWhere.push(`%${searchTerm.trim()}%`);
-      // queryValuesForWhere.push(`%${searchTerm.trim()}%`);
-      // queryValuesForWhere.push(`%${searchTerm.trim()}%`);
-      // For this example, let's use the simpler one first, assuming pg handles it.
-      // If not, use the version above with paramIndex incremented for each field.
-      // **Correction for clarity and safety with parameter indexing:**
-      // Let's ensure distinct parameter indexes if the search term is used multiple times in OR conditions
-    }
     
-    // --- Corrected Search Condition Logic ---
-    let searchCondition = '';
     if (searchTerm && searchTerm.trim() !== '') {
         const searchPattern = `%${searchTerm.trim()}%`;
-        const searchFields = ['name', 'cuisine', 'neighbourhood'];
+        const searchFields = ['name', 'cuisine', 'neighbourhood']; // Fields to search
         const searchSubConditions = searchFields.map(field => `${field} ILIKE $${paramIndex++}`);
-        searchCondition = `(${searchSubConditions.join(' OR ')})`;
-        conditions.push(searchCondition);
+        conditions.push(`(${searchSubConditions.join(' OR ')})`);
         searchFields.forEach(() => queryValuesForWhere.push(searchPattern));
     }
-    // --- End Corrected Search Condition Logic ---
-
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
@@ -132,16 +126,15 @@ app.get('/api/eateries', async (req, res) => {
     const totalPages = Math.ceil(totalItems / limit);
 
     // 2. Get paginated data
-    let dataQueryValues = [...queryValuesForWhere]; // Use the same values for where clause
+    let dataQueryValues = [...queryValuesForWhere];
     let dataQuery = `SELECT * FROM eateries ${whereClause} ORDER BY rating DESC, name ASC`;
 
-    // Reset paramIndex for LIMIT/OFFSET or ensure it's distinct from WHERE clause params
-    // Let's re-calculate paramIndex based on the length of dataQueryValues for safety
-    let finalParamIndex = dataQueryValues.length + 1; 
+    // Use current length of dataQueryValues to determine next paramIndex for LIMIT/OFFSET
+    let finalParamIndexForLimitOffset = dataQueryValues.length + 1; 
 
-    dataQuery += ` LIMIT $${finalParamIndex++}`;
+    dataQuery += ` LIMIT $${finalParamIndexForLimitOffset++}`;
     dataQueryValues.push(limit);
-    dataQuery += ` OFFSET $${finalParamIndex++}`;
+    dataQuery += ` OFFSET $${finalParamIndexForLimitOffset++}`;
     dataQueryValues.push(offset);
     
     // console.log('PAGINATION TEST - Count Query:', countQuery, queryValuesForWhere);
