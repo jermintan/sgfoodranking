@@ -1,42 +1,54 @@
+// src/components/FilterModal.js
 import React, { useState, useEffect } from 'react';
 
-// We get the list of unique cuisines from our mock data to build the checkboxes
-const Cuisines = ["Chinese", "Cafe", "Noodles", "Peranakan", "Western"];
-const Prices = ["$", "$$", "$$$"];
+// Cuisines array is no longer needed here
+// const Cuisines = [ ... ];
+const Prices = ["$", "$$", "$$$", "$$$$"];
 
 const FilterModal = ({ isOpen, onClose, onApply, currentFilters }) => {
-  // Temporary state to hold changes *before* the user clicks "Apply"
-  const [tempFilters, setTempFilters] = useState(currentFilters);
+  // tempFilters will now handle price, isHalal, isVegetarian
+  const [tempFilters, setTempFilters] = useState({
+    price: null,
+    // cuisines: [], // REMOVED
+    isHalal: false,
+    isVegetarian: false,
+    ...currentFilters // Spread currentFilters last
+  });
 
-  // When the modal opens, sync its temporary state with the app's current filters
   useEffect(() => {
-    setTempFilters(currentFilters);
+    if (isOpen) {
+      setTempFilters(prev => ({
+        price: null,
+        // cuisines: [], // REMOVED
+        isHalal: false,
+        isVegetarian: false,
+        ...currentFilters
+      }));
+    }
   }, [isOpen, currentFilters]);
 
   if (!isOpen) {
-    return null; // If not open, render nothing
+    return null;
   }
 
   const handlePriceChange = (price) => {
     setTempFilters(prev => ({ ...prev, price: prev.price === price ? null : price }));
   };
 
-  const handleCuisineChange = (cuisine) => {
-    setTempFilters(prev => {
-      const newCuisines = prev.cuisines.includes(cuisine)
-        ? prev.cuisines.filter(c => c !== cuisine)
-        : [...prev.cuisines, cuisine];
-      return { ...prev, cuisines: newCuisines };
-    });
+  // handleCuisineChange is no longer needed
+
+  const handleDietaryChange = (filterName) => {
+    setTempFilters(prev => ({ ...prev, [filterName]: !prev[filterName] }));
   };
-  
+
   const handleClear = () => {
-    setTempFilters({ price: null, cuisines: [] });
+    // Only clears price and dietary options
+    setTempFilters({ price: null, isHalal: false, isVegetarian: false });
   };
 
   const handleApplyClick = () => {
-    onApply(tempFilters); // Send the selected filters back to the parent
-    onClose(); // Close the modal
+    onApply(tempFilters);
+    onClose();
   };
 
   return (
@@ -47,6 +59,7 @@ const FilterModal = ({ isOpen, onClose, onApply, currentFilters }) => {
           <button className="close-button" onClick={onClose}>×</button>
         </div>
         <div className="modal-body">
+          {/* Price Range Section */}
           <div className="filter-section">
             <h4>Price Range</h4>
             <div className="button-group">
@@ -61,19 +74,35 @@ const FilterModal = ({ isOpen, onClose, onApply, currentFilters }) => {
               ))}
             </div>
           </div>
+
+          {/* Cuisine Section REMOVED */}
+          {/*
           <div className="filter-section">
             <h4>Cuisine</h4>
+            <div className="checkbox-group"> ... </div>
+          </div>
+          */}
+
+          {/* Dietary Options Section (KEEP THIS) */}
+          <div className="filter-section">
+            <h4>Dietary Options</h4>
             <div className="checkbox-group">
-              {Cuisines.map(c => (
-                <label key={c} className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={tempFilters.cuisines.includes(c)}
-                    onChange={() => handleCuisineChange(c)}
-                  />
-                  {c}
-                </label>
-              ))}
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={tempFilters.isHalal || false}
+                  onChange={() => handleDietaryChange('isHalal')}
+                />
+                Halal
+              </label>
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={tempFilters.isVegetarian || false}
+                  onChange={() => handleDietaryChange('isVegetarian')}
+                />
+                Vegetarian
+              </label>
             </div>
           </div>
         </div>

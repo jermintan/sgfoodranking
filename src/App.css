@@ -12,6 +12,12 @@ body {
   padding: 20px 80px;
   border-bottom: 1px solid #ebebeb;
 }
+.header-logo-png {
+  height: 32px; /* Adjust as needed */
+  width: 32px;  /* Adjust as needed, or use 'auto' for one dimension if you want to maintain aspect ratio */
+  display: block; /* Matches the SVG's display style */
+  /* Add any other styling like margin-right if needed */
+}
 .logo-container {
   display: flex;
   align-items: center;
@@ -20,7 +26,7 @@ body {
 .logo-text {
   font-size: 22px;
   font-weight: 600;
-  color: #FF385C;
+  color: #ca0000;
 }
 
 /* --- Eatery Grid Container --- */
@@ -409,4 +415,47 @@ body {
 .grab-button {
   background-color: #00B14F; /* Grab's green */
   color: white;
+}
+
+/* In App.css or your main CSS file */
+.pagination-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 20px;
+  margin-bottom: 20px;
+  flex-wrap: wrap; /* Allow buttons to wrap on smaller screens */
+}
+
+.pagination-button {
+  background-color: #f0f0f0;
+  border: 1px solid #ddd;
+  color: #333;
+  padding: 8px 12px;
+  margin: 0 4px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.pagination-button:hover:not(:disabled) {
+  background-color: #e0e0e0;
+}
+
+.pagination-button:disabled {
+  color: #aaa;
+  cursor: not-allowed;
+  background-color: #f9f9f9;
+}
+
+.pagination-button.active {
+  background-color: #007bff; /* Or your primary color */
+  color: white;
+  border-color: #007bff; /* Or your primary color */
+}
+
+.pagination-ellipsis {
+  padding: 8px 6px;
+  margin: 0 2px;
+  color: #777;
 }

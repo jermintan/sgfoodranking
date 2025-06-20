@@ -77,10 +77,6 @@ const EateryDetailPage = () => {
           </div>
         </div>
       </div>
-      <div className="detail-body">
-        <h2>About this place</h2>
-        <p>This is where a detailed description of the eatery would go. We could talk about its history, its signature dishes, and what makes it a local favorite. For now, this is just placeholder text, but it shows how the layout would accommodate more information.</p>
-      </div>
     </div>
   );
 };
