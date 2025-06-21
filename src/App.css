@@ -134,12 +134,43 @@ body {
   .eatery-grid-container {
     padding: 20px 24px;
   }
-  .search-input {
-    max-width: none; /* Allow search to fill space */
-  }
+
   .eatery-grid {
     grid-template-columns: 1fr; /* 1 column on mobile */
     gap: 32px; /* Increase gap for vertical stacking */
+  }
+  .search-bar-container {
+    flex-wrap: wrap; /* Allow items to wrap */
+    /* The gap will apply between the search input row and the button row */
+  }
+
+  .search-input {
+    width: 100%;     /* Search input takes full width, moving to its own line */
+    order: 1;        /* Visually first */
+    margin-bottom: 8px; /* Space between search row and button row */
+    flex-grow: 0; /* Reset grow for mobile if it was set for desktop */
+  }
+
+  /* Group the remaining buttons. We can wrap them in a div in JSX for easier control,
+     OR try to control them with flex properties directly if source order is fixed.
+     Let's try without an extra div first. */
+
+  .location-icon-button {
+    order: 2; /* First on the second row */
+    /* flex-grow: 0; default */
+    /* flex-shrink: 0; default from above */
+  }
+
+  .sort-dropdown {
+    order: 3; /* Second on the second row */
+    flex-grow: 1; /* Allow sort to take up more space on the button row */
+    min-width: 120px; /* Example: Ensure it has some minimum width */
+  }
+
+  .filter-button {
+    order: 4; /* Third on the second row */
+    /* flex-grow: 0; default */
+    /* flex-shrink: 0; default from above */
   }
 }
 
@@ -460,22 +491,21 @@ body {
   color: #777;
 }
 
-/* --- VERY SMALL MOBILE STYLES --- */
-@media (max-width: 480px) { /* Example for very small screens */
-  .search-bar-container {
-    flex-direction: column; /* Stack items vertically */
-    align-items: stretch; /* Make items take full width */
+@media (max-width: 438px) { /* Example: A point just above where it might break */
+  .sort-dropdown {
+    /* If the sort dropdown text is too long, it might be the culprit.
+       You could reduce its padding or font-size here. */
+    font-size: 0.85em; /* Slightly smaller */
+    padding: 16px 10px;
+    min-width: 0; /* Allow it to shrink more if needed, relying on content */
   }
 
-  .search-input,
-  .sort-dropdown,
   .filter-button {
-    width: 100%; /* Make them full width */
-    margin-bottom: 8px; /* Add some space between stacked items */
+    font-size: 0.85em;
+    padding: 16px 10px;
   }
 
-  .location-icon-button {
-    align-self: flex-start; /* Or center, depending on desired look */
-    margin-bottom: 8px;
+  .search-bar-container {
+    gap: 6px; /* Slightly reduce gap if space is very tight */
   }
 }
