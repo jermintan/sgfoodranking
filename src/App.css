@@ -140,7 +140,8 @@ body {
     gap: 32px; /* Increase gap for vertical stacking */
   }
   .search-bar-container {
-    flex-wrap: wrap; /* Allow items to wrap */
+    flex-wrap: wrap; 
+    margin-bottom: -20px;/* Allow items to wrap */
     /* The gap will apply between the search input row and the button row */
   }
 
@@ -506,6 +507,7 @@ body {
   }
 
   .search-bar-container {
-    gap: 6px; /* Slightly reduce gap if space is very tight */
+    gap: 6px;
+    padding-bottom: 10px; /* Slightly reduce gap if space is very tight */
   }
 }
