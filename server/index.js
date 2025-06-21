@@ -91,8 +91,8 @@ pool.connect((err, client, release) => {
 app.get('/api/eateries', async (req, res) => {
   try {
     const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 20; // Your items per page
-    const { is_halal, is_vegetarian, searchTerm } = req.query;
+    const limit = parseInt(req.query.limit, 10) || 20;
+    const { is_halal, is_vegetarian, searchTerm, price } = req.query; // Added price
 
     const offset = (page - 1) * limit;
 
@@ -108,10 +108,15 @@ app.get('/api/eateries', async (req, res) => {
       conditions.push(`is_vegetarian = $${paramIndex++}`);
       queryValuesForWhere.push(true);
     }
+    // Add server-side Price filter
+    if (price && ['$','$$','$$$','$$$$'].includes(price)) { // Validate price input
+        conditions.push(`price = $${paramIndex++}`);
+        queryValuesForWhere.push(price);
+    }
     
     if (searchTerm && searchTerm.trim() !== '') {
         const searchPattern = `%${searchTerm.trim()}%`;
-        const searchFields = ['name', 'cuisine', 'neighbourhood']; // Fields to search
+        const searchFields = ['name', 'cuisine', 'neighbourhood'];
         const searchSubConditions = searchFields.map(field => `${field} ILIKE $${paramIndex++}`);
         conditions.push(`(${searchSubConditions.join(' OR ')})`);
         searchFields.forEach(() => queryValuesForWhere.push(searchPattern));
@@ -129,16 +134,12 @@ app.get('/api/eateries', async (req, res) => {
     let dataQueryValues = [...queryValuesForWhere];
     let dataQuery = `SELECT * FROM eateries ${whereClause} ORDER BY rating DESC, name ASC`;
 
-    // Use current length of dataQueryValues to determine next paramIndex for LIMIT/OFFSET
     let finalParamIndexForLimitOffset = dataQueryValues.length + 1; 
-
     dataQuery += ` LIMIT $${finalParamIndexForLimitOffset++}`;
     dataQueryValues.push(limit);
     dataQuery += ` OFFSET $${finalParamIndexForLimitOffset++}`;
     dataQueryValues.push(offset);
     
-    // console.log('PAGINATION TEST - Count Query:', countQuery, queryValuesForWhere);
-    // console.log('PAGINATION TEST - Paginated Data Query:', dataQuery, dataQueryValues);
     const result = await pool.query(dataQuery, dataQueryValues);
 
     res.json({
