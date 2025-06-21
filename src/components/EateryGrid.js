@@ -5,41 +5,29 @@ import ListingCard from './ListingCard';
 import FilterModal from './FilterModal';
 import PaginationControls from './PaginationControls';
 
-// Haversine distance function
-function getDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371; // Radius of the Earth in km
-  const dLat = (lat2 - lat1) * (Math.PI / 180);
-  const dLon = (lon2 - lon1) * (Math.PI / 180);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
-
 const EateryGrid = () => {
   const [eateriesData, setEateriesData] = useState({
     list: [],
     currentPage: 1,
     totalPages: 0,
-    itemsPerPage: 20, // Your chosen default
+    itemsPerPage: 20,
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeFilters, setActiveFilters] = useState({
-    price: null, // Price will be sent to server
+    price: null,
     isHalal: false,
     isVegetarian: false
   });
   const [sortOrder, setSortOrder] = useState('default');
-  const [locationFilter, setLocationFilter] = useState(null); // Client-side
+  const [locationFilter, setLocationFilter] = useState(null); // Server-side filter trigger
   const [locationStatus, setLocationStatus] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
   const prevDebouncedSearchTermRef = useRef(debouncedSearchTerm);
   const prevActiveFiltersRef = useRef(activeFilters);
+  const prevLocationFilterRef = useRef(locationFilter); // Ref for location filter
 
   // Debounce search term
   useEffect(() => {
@@ -51,6 +39,7 @@ const EateryGrid = () => {
 
   // Fetch eateries function
   const fetchEateries = useCallback(async (pageToFetch = 1) => {
+    console.log("fetchEateries called with page:", pageToFetch, "Current locationFilter:", locationFilter); // DEBUG
     setIsLoading(true);
     const API_BASE_URL = process.env.NODE_ENV === 'production'
       ? process.env.REACT_APP_API_URL
@@ -62,16 +51,25 @@ const EateryGrid = () => {
 
     if (activeFilters.isHalal) queryParams.append('is_halal', 'true');
     if (activeFilters.isVegetarian) queryParams.append('is_vegetarian', 'true');
-    if (activeFilters.price) queryParams.append('price', activeFilters.price); // Send price to server
+    if (activeFilters.price) queryParams.append('price', activeFilters.price);
 
     if (debouncedSearchTerm && debouncedSearchTerm.trim() !== '') {
       queryParams.append('searchTerm', debouncedSearchTerm.trim());
     }
 
+    // *** ADD LOCATION PARAMS TO API CALL ***
+    if (locationFilter) {
+      queryParams.append('latitude', locationFilter.lat.toString());
+      queryParams.append('longitude', locationFilter.lon.toString());
+      queryParams.append('radius', locationFilter.radius.toString());
+    }
+
     try {
+      console.log("Fetching API with params:", queryParams.toString()); // DEBUG
       const response = await fetch(`${API_BASE_URL}/api/eateries?${queryParams.toString()}`);
       if (!response.ok) throw new Error(`Network response was not ok: ${response.statusText}`);
       const data = await response.json();
+      console.log("API Data Received:", data); // DEBUG
       
       setEateriesData({
         list: data.eateries || [],
@@ -86,86 +84,83 @@ const EateryGrid = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [activeFilters, eateriesData.itemsPerPage, debouncedSearchTerm]);
+  // *** ADD locationFilter TO useCallback DEPENDENCIES ***
+  }, [activeFilters, eateriesData.itemsPerPage, debouncedSearchTerm, locationFilter]);
 
   // Main useEffect for fetching data and handling page resets
   useEffect(() => {
+    console.log("Main useEffect triggered. Deps:", {debouncedSearchTerm, activeFilters, locationFilter, currentPage: eateriesData.currentPage}); // DEBUG
     const searchChanged = debouncedSearchTerm !== prevDebouncedSearchTermRef.current;
     const filtersChanged = JSON.stringify(activeFilters) !== JSON.stringify(prevActiveFiltersRef.current);
+    // *** USE JSON.stringify FOR OBJECT COMPARISON FOR locationFilterChanged ***
+    const locationFilterChanged = JSON.stringify(locationFilter) !== JSON.stringify(prevLocationFilterRef.current);
 
     let pageToFetch = eateriesData.currentPage;
+    let needsPageReset = false;
 
-    if (searchChanged || filtersChanged) {
-      pageToFetch = 1; // Reset to page 1 if search or filters change
-      // Update refs immediately if we decide to fetch page 1
+    if (searchChanged || filtersChanged || locationFilterChanged) {
+      console.log("Change detected:", {searchChanged, filtersChanged, locationFilterChanged}); // DEBUG
+      pageToFetch = 1;
+      needsPageReset = true;
+      // Update refs *after* determining a change has occurred
       prevDebouncedSearchTermRef.current = debouncedSearchTerm;
       prevActiveFiltersRef.current = activeFilters;
+      prevLocationFilterRef.current = locationFilter;
     }
     
     fetchEateries(pageToFetch);
 
-    // If we reset page to 1 due to filter/search change, update the state
-    // This ensures the pagination controls reflect page 1 immediately
-    // This condition prevents resetting if only currentPage changed due to pagination click
-    if ((searchChanged || filtersChanged) && eateriesData.currentPage !== 1) {
+    if (needsPageReset && eateriesData.currentPage !== 1) {
+        console.log("Resetting currentPage state to 1"); // DEBUG
         setEateriesData(prev => ({ ...prev, currentPage: 1 }));
     }
+  // *** ADD locationFilter TO useEffect DEPENDENCIES ***
+  }, [debouncedSearchTerm, activeFilters, locationFilter, eateriesData.currentPage, fetchEateries]);
 
-  }, [debouncedSearchTerm, activeFilters, eateriesData.currentPage, fetchEateries]);
 
-
-  // Handler for applying filters from modal
   const handleApplyFilters = (newFilters) => {
     setActiveFilters(newFilters);
-    // The main useEffect will detect activeFilters change and reset page / re-fetch.
   };
   
-  // Handler for page changes from PaginationControls
   const handlePageChange = (newPage) => {
     if (newPage !== eateriesData.currentPage) {
         setEateriesData(prev => ({ ...prev, currentPage: newPage }));
         window.scrollTo(0, 0);
-        // The main useEffect will detect currentPage change and re-fetch.
     }
   };
 
-  // Location handlers
   const handleGetLocation = () => {
+    console.log("handleGetLocation called"); // DEBUG
     if (!navigator.geolocation) {
       setLocationStatus('Geolocation is not supported.'); return;
     }
     setLocationStatus('Getting your location...');
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const { latitude, longitude } = position.coords;
+        const newLocation = { lat: position.coords.latitude, lon: position.coords.longitude, radius: 1 };
+        console.log("Location obtained, setting filter:", newLocation); // DEBUG
         setLocationStatus('');
-        setLocationFilter({ lat: latitude, lon: longitude, radius: 1 }); // Default 1km radius
+        setLocationFilter(newLocation);
       },
-      (error) => { setLocationStatus(`Error: ${error.message}`); }
+      (error) => { 
+        console.error("Error getting location:", error); // DEBUG
+        setLocationStatus(`Error: ${error.message}`); 
+      }
     );
   };
 
   const clearLocationFilter = () => {
+    console.log("clearLocationFilter called"); // DEBUG
     setLocationFilter(null);
     setLocationStatus('');
   };
 
-  // Client-side filtering and sorting (applied AFTER data for the current page is fetched)
   const processedEateries = useMemo(() => {
+    // Server handles all filtering (Halal, Veg, Search, Price, Location).
+    // This list is the direct result from the server for the current page.
     let eateriesToShow = [...eateriesData.list];
 
-    // Client-side location filter (operates on current page's data)
-    if (locationFilter) {
-      eateriesToShow = eateriesToShow.filter(eatery => {
-        if (eatery.latitude === null || eatery.longitude === null) return false;
-        const distance = getDistance(locationFilter.lat, locationFilter.lon, eatery.latitude, eatery.longitude);
-        return distance <= locationFilter.radius;
-      });
-    }
-
-    // PRICE FILTER IS NOW SERVER-SIDE, so removed from client-side processing here.
-
-    // Client-side sorting (operates on current page's data)
+    // Client-side sorting can still be applied to the server-filtered, paginated list.
     const localSortOrder = sortOrder;
     if (localSortOrder !== 'default') {
         eateriesToShow = [...eateriesToShow].sort((a, b) => {
@@ -175,9 +170,9 @@ const EateryGrid = () => {
         });
     }
     return eateriesToShow;
-  }, [eateriesData.list, activeFilters.price, sortOrder, locationFilter]); 
-  // activeFilters.price is kept because if price filter changes, the list from server changes.
-  // More broadly, activeFilters itself could be a dependency.
+  // Dependencies now only reflect what client-side processing is done on eateriesData.list
+  }, [eateriesData.list, sortOrder]);
+
 
   return (
     <>

@@ -92,7 +92,10 @@ app.get('/api/eateries', async (req, res) => {
   try {
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 20;
-    const { is_halal, is_vegetarian, searchTerm, price } = req.query; // Added price
+    const { 
+        is_halal, is_vegetarian, searchTerm, price,
+        latitude, longitude, radius // New location parameters
+    } = req.query;
 
     const offset = (page - 1) * limit;
 
@@ -100,19 +103,10 @@ app.get('/api/eateries', async (req, res) => {
     let queryValuesForWhere = [];
     let paramIndex = 1;
 
-    if (is_halal === 'true') {
-      conditions.push(`is_halal = $${paramIndex++}`);
-      queryValuesForWhere.push(true);
-    }
-    if (is_vegetarian === 'true') {
-      conditions.push(`is_vegetarian = $${paramIndex++}`);
-      queryValuesForWhere.push(true);
-    }
-    // Add server-side Price filter
-    if (price && ['$','$$','$$$','$$$$'].includes(price)) { // Validate price input
-        conditions.push(`price = $${paramIndex++}`);
-        queryValuesForWhere.push(price);
-    }
+    // --- Standard Filters ---
+    if (is_halal === 'true') { /* ... as before ... */ conditions.push(`is_halal = $${paramIndex++}`); queryValuesForWhere.push(true); }
+    if (is_vegetarian === 'true') { /* ... as before ... */ conditions.push(`is_vegetarian = $${paramIndex++}`); queryValuesForWhere.push(true); }
+    if (price && ['$','$$','$$$','$$$$'].includes(price)) { /* ... as before ... */ conditions.push(`price = $${paramIndex++}`); queryValuesForWhere.push(price); }
     
     if (searchTerm && searchTerm.trim() !== '') {
         const searchPattern = `%${searchTerm.trim()}%`;
@@ -121,6 +115,26 @@ app.get('/api/eateries', async (req, res) => {
         conditions.push(`(${searchSubConditions.join(' OR ')})`);
         searchFields.forEach(() => queryValuesForWhere.push(searchPattern));
     }
+
+    // --- Location Filter (Server-Side) ---
+    // Ensure latitude, longitude, and radius are valid numbers if provided
+    const userLat = parseFloat(latitude);
+    const userLng = parseFloat(longitude);
+    const searchRadius = parseFloat(radius);
+
+    if (!isNaN(userLat) && !isNaN(userLng) && !isNaN(searchRadius) && searchRadius > 0) {
+      // Use the haversine_distance function created in your DB
+      // The function takes (userLat, userLng, eatery.latitude, eatery.longitude)
+      // Parameters for the function will be $${paramIndex}, $${paramIndex+1}
+      // Parameter for the radius comparison will be $${paramIndex+2}
+      conditions.push(
+        `haversine_distance($${paramIndex++}, $${paramIndex++}, latitude, longitude) <= $${paramIndex++}`
+      );
+      queryValuesForWhere.push(userLat);
+      queryValuesForWhere.push(userLng);
+      queryValuesForWhere.push(searchRadius);
+    }
+    // --- End Location Filter ---
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
@@ -131,15 +145,35 @@ app.get('/api/eateries', async (req, res) => {
     const totalPages = Math.ceil(totalItems / limit);
 
     // 2. Get paginated data
-    let dataQueryValues = [...queryValuesForWhere];
-    let dataQuery = `SELECT * FROM eateries ${whereClause} ORDER BY rating DESC, name ASC`;
-
-    let finalParamIndexForLimitOffset = dataQueryValues.length + 1; 
-    dataQuery += ` LIMIT $${finalParamIndexForLimitOffset++}`;
-    dataQueryValues.push(limit);
-    dataQuery += ` OFFSET $${finalParamIndexForLimitOffset++}`;
-    dataQueryValues.push(offset);
+    let dataQueryValues = [...queryValuesForWhere]; // Values for WHERE clause
+    let dataQuery = `SELECT *, 
+                        ${(!isNaN(userLat) && !isNaN(userLng)) ? 
+                            `haversine_distance(${userLat}, ${userLng}, latitude, longitude) AS distance` : 
+                            'NULL AS distance'} 
+                     FROM eateries ${whereClause}`;
     
+    // ORDER BY: If location filter is active, sort by distance first, then rating. Otherwise, by rating.
+    if (!isNaN(userLat) && !isNaN(userLng) && !isNaN(searchRadius) && searchRadius > 0) {
+        dataQuery += ` ORDER BY distance ASC, rating DESC, name ASC`;
+    } else {
+        dataQuery += ` ORDER BY rating DESC, name ASC`;
+    }
+
+    let finalParamIndexForLimitOffset = dataQueryValues.length + 1; // This needs to be dynamic based on params already in dataQueryValues for WHERE
+                                                                  // The actual SQL parameters $1, $2 are built by the pg driver
+
+    // Re-calculate paramIndex for LIMIT/OFFSET based on how many $n were used in queryValuesForWhere
+    // The above 'paramIndex' already reflects the count after WHERE clause parameters.
+    // So, the *next* available placeholders for LIMIT and OFFSET will start from this `paramIndex`.
+
+    dataQuery += ` LIMIT $${paramIndex++}`; // paramIndex continues from where WHERE clause left off
+    dataQueryValues.push(limit); // This value will be used for the LIMIT placeholder
+
+    dataQuery += ` OFFSET $${paramIndex++}`; // paramIndex continues further
+    dataQueryValues.push(offset); // This value will be used for the OFFSET placeholder
+    
+    // console.log('PAGINATION TEST - Count Query:', countQuery, queryValuesForWhere);
+    // console.log('PAGINATION TEST - Paginated Data Query:', dataQuery, dataQueryValues);
     const result = await pool.query(dataQuery, dataQueryValues);
 
     res.json({
@@ -151,7 +185,7 @@ app.get('/api/eateries', async (req, res) => {
     });
 
   } catch (err) {
-    console.error('Error executing query for all eateries (paginated/searched):', err.stack);
+    console.error('Error executing query for all eateries:', err.stack);
     res.status(500).send('Server Error retrieving eateries');
   }
 });
