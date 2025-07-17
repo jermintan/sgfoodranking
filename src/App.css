@@ -70,7 +70,7 @@ body {
   grid-template-columns: repeat(5, 1fr);
   /* This is the key change for the gap between cards */
   gap: 28px;             /* Reduce the space between cards */
-  margin-top: -40px;
+
 }
 
 /* --- The New Listing Card --- */
@@ -140,7 +140,7 @@ body {
   .eatery-grid {
     grid-template-columns: 1fr; /* 1 column on mobile */
     gap: 32px; /* Increase gap for vertical stacking */
-    margin-top: 0px;
+    
   }
   .search-bar-container {
     flex-wrap: wrap; 
