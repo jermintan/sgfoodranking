@@ -11,6 +11,8 @@ body {
 .main-header {
   padding: 20px 80px;
   border-bottom: 1px solid #ebebeb;
+  justify-content: space-between;
+  display: flex;
 }
 .header-logo-png {
   height: 32px; /* Adjust as needed */
@@ -118,6 +120,8 @@ body {
 .card-reviews { color: #717171; }
 .card-price { margin-left: 8px; font-weight: 600; }
 
+
+
 /* --- Tablet Responsiveness --- */
 @media (max-width: 1024px) {
   .main-header,
@@ -185,6 +189,9 @@ body {
   }
   .location-filter-active {
     margin-top: 40px;
+  }
+  .main-header {
+    display: block;
   }
 }
 
@@ -504,6 +511,7 @@ body {
   margin: 0 2px;
   color: #777;
 }
+
 
 @media (max-width: 438px) { /* Example: A point just above where it might break */
   .sort-dropdown {

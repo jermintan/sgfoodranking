@@ -12,6 +12,7 @@ const Header = () => {
         <img src={logoImage} alt="sgfooddirectory logo" className="header-logo-png" />
         <span className="logo-text">sgfooddirectory</span>
       </div>
+      <p>Your Local Guide to Delicious Singapore Eats.</p>
     </header>
   );
 };
