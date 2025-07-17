@@ -140,7 +140,8 @@ body {
   .eatery-grid {
     grid-template-columns: 1fr; /* 1 column on mobile */
     gap: 32px; /* Increase gap for vertical stacking */
-    
+    margin-top: 20px;
+
   }
   .search-bar-container {
     flex-wrap: wrap; 
@@ -181,6 +182,9 @@ body {
   }
   .card-image-bg {
     width: 200px;
+  }
+  .location-filter-active {
+    margin-top: 40px;
   }
 }
 
