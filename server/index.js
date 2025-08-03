@@ -1,4 +1,4 @@
-// FILE: server/index.js (FINAL - Removed Image Proxy)
+// FILE: server/index.js (FINAL - SIMPLIFIED API FOR DEPLOYMENT)
 
 require('dotenv').config();
 const express = require('express');
@@ -23,85 +23,39 @@ pool.query('SELECT NOW() AS now')
   .then(() => console.log(`Successfully connected to ${isProductionApp ? 'PRODUCTION DB' : 'LOCAL DB'}.`))
   .catch(err => console.error(`Error connecting to ${isProductionApp ? 'PRODUCTION DB' : 'LOCAL DB'}:`, err.stack));
 
-
 // --- API ENDPOINTS ---
+
+// --- THIS IS THE SIMPLIFIED ENDPOINT ---
+// It ignores all filters and just sends the first page of results.
 app.get('/api/eateries', async (req, res) => {
   try {
-    const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 20;
-    const { 
-        is_halal, is_vegetarian, searchTerm, price,
-        latitude, longitude, radius
-    } = req.query;
+    const limit = 20; // Default limit
+    const offset = 0; // Always fetch the first page
 
-    const offset = (page - 1) * limit;
-    let conditions = [];
-    let queryValuesForWhere = [];
-    let paramIndex = 1;
-
-    if (is_halal === 'true') { conditions.push(`is_halal = $${paramIndex++}`); queryValuesForWhere.push(true); }
-    if (is_vegetarian === 'true') { conditions.push(`is_vegetarian = $${paramIndex++}`); queryValuesForWhere.push(true); }
-    if (price && ['$','$$','$$$','$$$$'].includes(price)) { conditions.push(`price = $${paramIndex++}`); queryValuesForWhere.push(price); }
+    console.log("Simplified /api/eateries endpoint hit! Fetching all eateries.");
     
-    if (searchTerm && searchTerm.trim() !== '') {
-        const searchPattern = `%${searchTerm.trim()}%`;
-        const searchFields = ['name', 'cuisine', 'neighbourhood'];
-        const searchSubConditions = searchFields.map(field => `${field} ILIKE $${paramIndex++}`);
-        conditions.push(`(${searchSubConditions.join(' OR ')})`);
-        searchFields.forEach(() => queryValuesForWhere.push(searchPattern));
-    }
-
-    const userLat = parseFloat(latitude);
-    const userLng = parseFloat(longitude);
-    const searchRadius = parseFloat(radius);
-
-    if (!isNaN(userLat) && !isNaN(userLng) && !isNaN(searchRadius) && searchRadius > 0) {
-      conditions.push(`haversine_distance($${paramIndex++}, $${paramIndex++}, latitude, longitude) <= $${paramIndex++}`);
-      queryValuesForWhere.push(userLat);
-      queryValuesForWhere.push(userLng);
-      queryValuesForWhere.push(searchRadius);
-    }
-
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-    const countQuery = `SELECT COUNT(*) FROM eateries ${whereClause}`;
-    const totalItemsResult = await pool.query(countQuery, queryValuesForWhere);
-    const totalItems = parseInt(totalItemsResult.rows[0].count, 10);
-    const totalPages = Math.ceil(totalItems / limit);
-
-    let dataQueryValues = [...queryValuesForWhere];
-    let dataQuery = `SELECT *, ${(!isNaN(userLat) && !isNaN(userLng)) ? `haversine_distance(${userLat}, ${userLng}, latitude, longitude) AS distance` : 'NULL AS distance'} FROM eateries ${whereClause}`;
-    
-    if (!isNaN(userLat) && !isNaN(userLng) && !isNaN(searchRadius) && searchRadius > 0) {
-        dataQuery += ` ORDER BY distance ASC, rating DESC, name ASC`;
-    } else {
-        dataQuery += ` ORDER BY rating DESC, name ASC`;
-    }
-
-    dataQuery += ` LIMIT $${paramIndex++}`;
-    dataQueryValues.push(limit);
-    dataQuery += ` OFFSET $${paramIndex++}`;
-    dataQueryValues.push(offset);
-    
-    const result = await pool.query(dataQuery, dataQueryValues);
+    const result = await pool.query('SELECT * FROM eateries ORDER BY rating DESC, name ASC LIMIT $1 OFFSET $2', [limit, offset]);
+    const countResult = await pool.query('SELECT COUNT(*) FROM eateries');
+    const totalItems = parseInt(countResult.rows[0].count, 10);
 
     const eateriesWithParsedPhotos = result.rows.map(eatery => ({
       ...eatery,
       photos: (typeof eatery.photos === 'string') ? JSON.parse(eatery.photos) : (eatery.photos || [])
     }));
-
+    
     res.json({
       eateries: eateriesWithParsedPhotos,
-      currentPage: page,
-      totalPages: totalPages,
-      totalItems: totalItems,
-      itemsPerPage: limit
+      currentPage: 1,
+      totalPages: Math.ceil(totalItems / limit)
     });
+
   } catch (err) {
-    console.error('Error executing query for all eateries:', err.stack);
-    res.status(500).send('Server Error retrieving eateries');
+    console.error('Error in simplified /api/eateries:', err.stack);
+    res.status(500).send('Server Error');
   }
 });
 
+// --- SINGLE EATERY ENDPOINT (UNCHANGED) ---
 app.get('/api/eateries/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -114,11 +68,9 @@ app.get('/api/eateries/:id', async (req, res) => {
     res.json(eatery);
   } catch (err) {
     console.error('Error executing single eatery query:', err.stack);
-    res.status(500).send('Server Error retrieving single eatery');
+    res.status(500).send('Server Error');
   }
 });
-
-// --- The /api/image endpoint has been removed ---
 
 // --- STATIC FILE SERVING FOR PRODUCTION ---
 if (process.env.NODE_ENV === 'production') {
