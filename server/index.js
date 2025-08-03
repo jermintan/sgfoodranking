@@ -1,38 +1,21 @@
-// FILE: server/index.js (FINAL DEPLOYMENT VERSION)
+// FILE: server/index.js (FINAL DEPLOYMENT VERSION - Health Check Fix)
 
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
 const axios = require('axios');
-const path = require('path'); // <<< --- ADDITION #1: Import the 'path' module
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(express.json());
-
-// --- CONFIGURE CORS ---
-const allowedOrigins = [
-  'http://localhost:3000',
-  'https://www.sgfooddirectory.com',
-  'https://sgfooddirectory.com',
-  'https://sgfoodranking.vercel.app'
-];
-
-const corsOptions = {
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  optionsSuccessStatus: 200
-};
-
-app.use(cors(corsOptions));
+// --- THIS IS THE ONLY CHANGE ---
+// Use a simpler CORS setup that is compatible with Render's health checks
+app.use(cors());
+// --- END OF CHANGE ---
 
 // --- DATABASE CONNECTION ---
 const isProductionApp = process.env.NODE_ENV === 'production';
@@ -48,7 +31,6 @@ pool.query('SELECT NOW() AS now')
 
 // --- API ENDPOINTS ---
 // (Your existing, full-featured API endpoints are unchanged)
-
 app.get('/api/eateries', async (req, res) => {
   try {
     const page = parseInt(req.query.page, 10) || 1;
@@ -148,39 +130,25 @@ app.get('/api/image', async (req, res) => {
     if (!imageUrl) {
       return res.status(400).send('Image URL is required');
     }
-    const imageApiResponse = await axios({
-      method: 'GET',
-      url: imageUrl,
-      responseType: 'stream',
-    });
+    const imageApiResponse = await axios({ method: 'GET', url: imageUrl, responseType: 'stream' });
     res.setHeader('Content-Type', imageApiResponse.headers['content-type']);
     imageApiResponse.data.pipe(res);
   } catch (error) {
     console.error('Image proxy error:', error.message);
-    if (error.response) {
-        console.error('Image proxy error response status:', error.response.status);
-    }
+    if (error.response) { console.error('Image proxy error response status:', error.response.status); }
     res.status(error.response?.status || 500).send('Error fetching image');
   }
 });
 
-// --- ADDITION #2: STATIC FILE SERVING FOR PRODUCTION ---
-// This code must be AFTER your API routes and BEFORE app.listen()
+// --- STATIC FILE SERVING FOR PRODUCTION ---
 if (process.env.NODE_ENV === 'production') {
-  // Serve static files from the React app's 'build' directory
-  // The path goes ../ up one level from 'server' to the root, then into 'build'
   app.use(express.static(path.join(__dirname, '../build')));
-
-  // The "catchall" handler: for any request that doesn't match an API route,
-  // send back React's index.html file. This allows React Router to work.
   app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, '../build/index.html'));
   });
 }
-// --- END OF ADDITION #2 ---
   
 // --- START SERVER ---
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
-  // Removed the duplicate log message for API availability
 });
