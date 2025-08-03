@@ -106,7 +106,7 @@ app.get('/api/eateries/:id', async (req, res) => {
     const { id } = req.params;
     const result = await pool.query('SELECT * FROM eateries WHERE id = $1', [id]);
     if (result.rows.length === 0) {
-      return res.status(444).json({ error: 'Eatery not found' });
+      return res.status(404).json({ error: 'Eatery not found' });
     }
     const eatery = result.rows[0];
     eatery.photos = (typeof eatery.photos === 'string') ? JSON.parse(eatery.photos) : (eatery.photos || []);
@@ -118,10 +118,11 @@ app.get('/api/eateries/:id', async (req, res) => {
 });
 
 // --- STATIC FILE SERVING FOR PRODUCTION ---
+// This path is now simpler because we run from the root.
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../build')));
+  app.use(express.static(path.join(__dirname, 'build')));
   app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../build/index.html'));
+    res.sendFile(path.join(__dirname, 'build/index.html'));
   });
 }
   

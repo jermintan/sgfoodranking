@@ -1,23 +1,25 @@
 {
-  "name": "eatery-airbnb",
-  "version": "0.1.0",
+  "name": "sgfoodranking",
+  "version": "1.0.0",
   "private": true,
+  "main": "server/index.js",
   "dependencies": {
-    "@testing-library/dom": "^10.4.0",
-    "@testing-library/jest-dom": "^6.6.3",
-    "@testing-library/react": "^16.3.0",
-    "@testing-library/user-event": "^13.5.0",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "react-router-dom": "^6.30.1",
-    "react-scripts": "5.0.1",
-    "web-vitals": "^2.1.4"
+    "axios": "^1.10.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^4.19.2",
+    "pg": "^8.16.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.23.1",
+    "react-scripts": "5.0.1"
   },
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "server": "node server/index.js"
   },
   "eslintConfig": {
     "extends": [
