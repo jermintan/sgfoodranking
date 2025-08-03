@@ -1,4 +1,4 @@
-// FILE: server/index.js (FINAL DEPLOYMENT VERSION)
+// FILE: server/index.js (FINAL - CORRECTED FILE PATH)
 
 require('dotenv').config();
 const express = require('express');
@@ -15,13 +15,14 @@ app.use(express.json());
 // --- DATABASE CONNECTION ---
 const isProductionApp = process.env.NODE_ENV === 'production';
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || `postgresql://postgres:Chal1124!@localhost:5432/eatery_app?sslmode=disable`,
+  connectionString: process.env.DATABASE_URL || `postgresql://postgres:Chal1234!@localhost:5432/eatery_app?sslmode=disable`,
   ssl: isProductionApp ? { rejectUnauthorized: false } : false,
 });
 
 pool.query('SELECT NOW() AS now')
-  .then(res => console.log(`Successfully connected to ${isProductionApp ? 'PRODUCTION DB (Render)' : 'LOCAL DB'}.`))
+  .then(res => console.log(`Successfully connected to ${isProductionApp ? 'PRODUCTION DB' : 'LOCAL DB'}.`))
   .catch(err => console.error(`Error connecting to ${isProductionApp ? 'PRODUCTION DB' : 'LOCAL DB'}:`, err.stack));
+
 
 // --- API ENDPOINTS ---
 app.get('/api/eateries', async (req, res) => {
@@ -117,12 +118,15 @@ app.get('/api/eateries/:id', async (req, res) => {
   }
 });
 
+
 // --- STATIC FILE SERVING FOR PRODUCTION ---
-// This path is now simpler because we run from the root.
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, 'build')));
+  // --- THIS IS THE ONLY CHANGE - THE PATH IS NOW CORRECT ---
+  // The server is in /server, the build is in /build. We go up one level.
+  app.use(express.static(path.join(__dirname, '../build')));
+
   app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'build/index.html'));
+    res.sendFile(path.join(__dirname, '../build/index.html'));
   });
 }
   
