@@ -1,4 +1,4 @@
-// FILE: server/index.js (FINAL - SIMPLIFIED API FOR DEPLOYMENT)
+// FILE: server/index.js (FINAL DEBUGGING VERSION)
 
 require('dotenv').config();
 const express = require('express');
@@ -20,42 +20,42 @@ const pool = new Pool({
 });
 
 pool.query('SELECT NOW() AS now')
-  .then(() => console.log(`Successfully connected to ${isProductionApp ? 'PRODUCTION DB' : 'LOCAL DB'}.`))
+  .then(res => console.log(`Successfully connected to ${isProductionApp ? 'PRODUCTION DB' : 'LOCAL DB'}.`))
   .catch(err => console.error(`Error connecting to ${isProductionApp ? 'PRODUCTION DB' : 'LOCAL DB'}:`, err.stack));
 
 // --- API ENDPOINTS ---
 
-// --- THIS IS THE SIMPLIFIED ENDPOINT ---
-// It ignores all filters and just sends the first page of results.
 app.get('/api/eateries', async (req, res) => {
   try {
-    const limit = 20; // Default limit
-    const offset = 0; // Always fetch the first page
+    // --- DEBUG LOG #1 ---
+    console.log("LOG: /api/eateries endpoint was hit.");
 
-    console.log("Simplified /api/eateries endpoint hit! Fetching all eateries.");
+    const result = await pool.query('SELECT * FROM eateries ORDER BY rating DESC, name ASC');
     
-    const result = await pool.query('SELECT * FROM eateries ORDER BY rating DESC, name ASC LIMIT $1 OFFSET $2', [limit, offset]);
-    const countResult = await pool.query('SELECT COUNT(*) FROM eateries');
-    const totalItems = parseInt(countResult.rows[0].count, 10);
+    // --- DEBUG LOG #2 ---
+    console.log(`LOG: Database query returned ${result.rows.length} rows.`);
 
     const eateriesWithParsedPhotos = result.rows.map(eatery => ({
       ...eatery,
       photos: (typeof eatery.photos === 'string') ? JSON.parse(eatery.photos) : (eatery.photos || [])
     }));
     
+    // --- DEBUG LOG #3 ---
+    console.log("LOG: Sending successful response to frontend.");
+    
     res.json({
       eateries: eateriesWithParsedPhotos,
-      currentPage: 1,
-      totalPages: Math.ceil(totalItems / limit)
+      totalPages: Math.ceil(result.rows.length / 20)
     });
 
   } catch (err) {
-    console.error('Error in simplified /api/eateries:', err.stack);
+    // --- DEBUG LOG #4 (for errors) ---
+    console.error('LOG: An error occurred in /api/eateries endpoint:', err.stack);
     res.status(500).send('Server Error');
   }
 });
 
-// --- SINGLE EATERY ENDPOINT (UNCHANGED) ---
+// (The rest of the file is the same)
 app.get('/api/eateries/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -72,7 +72,6 @@ app.get('/api/eateries/:id', async (req, res) => {
   }
 });
 
-// --- STATIC FILE SERVING FOR PRODUCTION ---
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '../build')));
   app.get('*', (req, res) => {
@@ -80,7 +79,6 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
   
-// --- START SERVER ---
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
