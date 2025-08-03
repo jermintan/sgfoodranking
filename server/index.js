@@ -1,10 +1,8 @@
-// FILE: server/index.js
+// FILE: server/index.js (FINAL VERSION - Correctly handles the 'photos' column)
 
-// Load environment variables from .env file (if it exists)
 require('dotenv').config();
-
 const express = require('express');
-const cors = require('cors'); // Make sure 'cors' is installed (npm install cors)
+const cors = require('cors');
 const { Pool } = require('pg');
 const axios = require('axios');
 
@@ -12,77 +10,40 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
-// app.use(cors()); // We will replace this with more specific options
 app.use(express.json());
-
 
 // --- CONFIGURE CORS ---
 const allowedOrigins = [
-  'http://localhost:3000',         // For your local React dev server
-  'https://www.sgfooddirectory.com', // Your new live frontend domain (primary)
-  'https://sgfooddirectory.com',     // The root domain (secondary, good to include)
-  'https://sgfoodranking.vercel.app' // Your old Vercel frontend domain (optional)
-  // Add any other origins that need access in the future
+  'http://localhost:3000',
+  'https://www.sgfooddirectory.com',
+  'https://sgfooddirectory.com',
+  'https://sgfoodranking.vercel.app'
 ];
 
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps, curl, Postman)
-    if (!origin) return callback(null, true);
-
-    if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = `The CORS policy for this site does not allow access from the specified Origin: ${origin}`;
-      return callback(new Error(msg), false);
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
     }
-    return callback(null, true);
   },
-  optionsSuccessStatus: 200 // Some legacy browsers (IE11, various SmartTVs) choke on 204
+  optionsSuccessStatus: 200
 };
 
-app.use(cors(corsOptions)); // Apply the configured CORS options
+app.use(cors(corsOptions));
 
-
-// --- DATABASE CONNECTION for EXPRESS APP ---
+// --- DATABASE CONNECTION ---
 const isProductionApp = process.env.NODE_ENV === 'production';
-let appConnectionString;
-
-if (isProductionApp) {
-  appConnectionString = process.env.DATABASE_URL;
-  if (!appConnectionString) {
-    console.error("FATAL: DATABASE_URL not found in environment for production app.");
-    process.exit(1);
-  }
-} else {
-  appConnectionString = `postgresql://postgres:Chal1124!@localhost:5432/eatery_app?sslmode=disable`;
-}
-
-const appPoolConfig = {
-  connectionString: appConnectionString,
-};
-
-if (isProductionApp) {
-  appPoolConfig.ssl = { rejectUnauthorized: false };
-}
-
-const pool = new Pool(appPoolConfig);
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL || `postgresql://postgres:Chal1124!@localhost:5432/eatery_app?sslmode=disable`,
+  ssl: isProductionApp ? { rejectUnauthorized: false } : false,
+});
 
 // Test DB connection on startup
-pool.connect((err, client, release) => {
-  if (err) {
-    return console.error(`Error acquiring client from pool for ${isProductionApp ? 'PRODUCTION DB' : 'LOCAL DB'} on startup:`, err.stack);
-  }
-  client.query('SELECT NOW() AS now', (err, result) => {
-    release();
-    if (err) {
-      return console.error(`Error executing test query on ${isProductionApp ? 'PRODUCTION DB' : 'LOCAL DB'} on startup:`, err.stack);
-    }
-    if (result && result.rows && result.rows.length > 0) {
-        console.log(`Successfully connected to ${isProductionApp ? 'PRODUCTION DB (Render)' : 'LOCAL DB'}. Test query result:`, result.rows[0].now);
-    } else {
-        console.log(`Successfully connected to ${isProductionApp ? 'PRODUCTION DB (Render)' : 'LOCAL DB'}. Test query ran, but no rows returned.`);
-    }
-  });
-});
+pool.query('SELECT NOW() AS now')
+  .then(res => console.log(`Successfully connected to ${isProductionApp ? 'PRODUCTION DB (Render)' : 'LOCAL DB'}. Test query result:`, res.rows[0].now))
+  .catch(err => console.error(`Error connecting to ${isProductionApp ? 'PRODUCTION DB' : 'LOCAL DB'} on startup:`, err.stack));
 
 
 // --- API ENDPOINTS ---
@@ -94,7 +55,7 @@ app.get('/api/eateries', async (req, res) => {
     const limit = parseInt(req.query.limit, 10) || 20;
     const { 
         is_halal, is_vegetarian, searchTerm, price,
-        latitude, longitude, radius // New location parameters
+        latitude, longitude, radius
     } = req.query;
 
     const offset = (page - 1) * limit;
@@ -104,9 +65,9 @@ app.get('/api/eateries', async (req, res) => {
     let paramIndex = 1;
 
     // --- Standard Filters ---
-    if (is_halal === 'true') { /* ... as before ... */ conditions.push(`is_halal = $${paramIndex++}`); queryValuesForWhere.push(true); }
-    if (is_vegetarian === 'true') { /* ... as before ... */ conditions.push(`is_vegetarian = $${paramIndex++}`); queryValuesForWhere.push(true); }
-    if (price && ['$','$$','$$$','$$$$'].includes(price)) { /* ... as before ... */ conditions.push(`price = $${paramIndex++}`); queryValuesForWhere.push(price); }
+    if (is_halal === 'true') { conditions.push(`is_halal = $${paramIndex++}`); queryValuesForWhere.push(true); }
+    if (is_vegetarian === 'true') { conditions.push(`is_vegetarian = $${paramIndex++}`); queryValuesForWhere.push(true); }
+    if (price && ['$','$$','$$$','$$$$'].includes(price)) { conditions.push(`price = $${paramIndex++}`); queryValuesForWhere.push(price); }
     
     if (searchTerm && searchTerm.trim() !== '') {
         const searchPattern = `%${searchTerm.trim()}%`;
@@ -116,17 +77,12 @@ app.get('/api/eateries', async (req, res) => {
         searchFields.forEach(() => queryValuesForWhere.push(searchPattern));
     }
 
-    // --- Location Filter (Server-Side) ---
-    // Ensure latitude, longitude, and radius are valid numbers if provided
+    // --- Location Filter ---
     const userLat = parseFloat(latitude);
     const userLng = parseFloat(longitude);
     const searchRadius = parseFloat(radius);
 
     if (!isNaN(userLat) && !isNaN(userLng) && !isNaN(searchRadius) && searchRadius > 0) {
-      // Use the haversine_distance function created in your DB
-      // The function takes (userLat, userLng, eatery.latitude, eatery.longitude)
-      // Parameters for the function will be $${paramIndex}, $${paramIndex+1}
-      // Parameter for the radius comparison will be $${paramIndex+2}
       conditions.push(
         `haversine_distance($${paramIndex++}, $${paramIndex++}, latitude, longitude) <= $${paramIndex++}`
       );
@@ -134,7 +90,6 @@ app.get('/api/eateries', async (req, res) => {
       queryValuesForWhere.push(userLng);
       queryValuesForWhere.push(searchRadius);
     }
-    // --- End Location Filter ---
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
@@ -145,39 +100,46 @@ app.get('/api/eateries', async (req, res) => {
     const totalPages = Math.ceil(totalItems / limit);
 
     // 2. Get paginated data
-    let dataQueryValues = [...queryValuesForWhere]; // Values for WHERE clause
+    let dataQueryValues = [...queryValuesForWhere];
     let dataQuery = `SELECT *, 
                         ${(!isNaN(userLat) && !isNaN(userLng)) ? 
                             `haversine_distance(${userLat}, ${userLng}, latitude, longitude) AS distance` : 
                             'NULL AS distance'} 
                      FROM eateries ${whereClause}`;
     
-    // ORDER BY: If location filter is active, sort by distance first, then rating. Otherwise, by rating.
     if (!isNaN(userLat) && !isNaN(userLng) && !isNaN(searchRadius) && searchRadius > 0) {
         dataQuery += ` ORDER BY distance ASC, rating DESC, name ASC`;
     } else {
         dataQuery += ` ORDER BY rating DESC, name ASC`;
     }
 
-    let finalParamIndexForLimitOffset = dataQueryValues.length + 1; // This needs to be dynamic based on params already in dataQueryValues for WHERE
-                                                                  // The actual SQL parameters $1, $2 are built by the pg driver
-
-    // Re-calculate paramIndex for LIMIT/OFFSET based on how many $n were used in queryValuesForWhere
-    // The above 'paramIndex' already reflects the count after WHERE clause parameters.
-    // So, the *next* available placeholders for LIMIT and OFFSET will start from this `paramIndex`.
-
-    dataQuery += ` LIMIT $${paramIndex++}`; // paramIndex continues from where WHERE clause left off
-    dataQueryValues.push(limit); // This value will be used for the LIMIT placeholder
-
-    dataQuery += ` OFFSET $${paramIndex++}`; // paramIndex continues further
-    dataQueryValues.push(offset); // This value will be used for the OFFSET placeholder
+    dataQuery += ` LIMIT $${paramIndex++}`;
+    dataQueryValues.push(limit);
+    dataQuery += ` OFFSET $${paramIndex++}`;
+    dataQueryValues.push(offset);
     
-    // console.log('PAGINATION TEST - Count Query:', countQuery, queryValuesForWhere);
-    // console.log('PAGINATION TEST - Paginated Data Query:', dataQuery, dataQueryValues);
     const result = await pool.query(dataQuery, dataQueryValues);
 
+    // --- NEW FIX FOR PHOTOS ---
+    // The ListingCard needs a single image URL to display. We will add it here.
+    const eateriesWithMainPhoto = result.rows.map(eatery => {
+      let mainPhotoUrl = 'https://via.placeholder.com/400x400.png?text=No+Image';
+      // The 'photos' column is a JSON string. We must parse it.
+      const photosArray = (typeof eatery.photos === 'string') ? JSON.parse(eatery.photos) : (eatery.photos || []);
+      
+      if (photosArray.length > 0) {
+        // We can just send the photo reference name. The frontend will build the full URL.
+        // This keeps the backend simpler.
+      }
+      return {
+        ...eatery,
+        photos: photosArray // Send the parsed array
+      };
+    });
+    // --- END OF FIX ---
+
     res.json({
-      eateries: result.rows,
+      eateries: eateriesWithMainPhoto,
       currentPage: page,
       totalPages: totalPages,
       totalItems: totalItems,
@@ -198,12 +160,26 @@ app.get('/api/eateries/:id', async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Eatery not found' });
     }
-    res.json(result.rows[0]);
+
+    const eatery = result.rows[0];
+
+    // --- NEW FIX FOR PHOTOS ---
+    // The 'photos' column is stored as a JSON string. We parse it into a real array.
+    if (typeof eatery.photos === 'string') {
+      eatery.photos = JSON.parse(eatery.photos);
+    } else {
+      // If photos is null or not a string, ensure it's an empty array
+      eatery.photos = eatery.photos || [];
+    }
+    // --- END OF FIX ---
+
+    res.json(eatery);
   } catch (err) {
     console.error('Error executing single eatery query:', err.stack);
     res.status(500).send('Server Error retrieving single eatery');
   }
 });
+
 
 // Image Proxy Endpoint
 app.get('/api/image', async (req, res) => {
@@ -227,6 +203,7 @@ app.get('/api/image', async (req, res) => {
     res.status(error.response?.status || 500).send('Error fetching image');
   }
 });
+
 
 // --- START SERVER ---
 app.listen(PORT, () => {
