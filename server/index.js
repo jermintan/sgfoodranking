@@ -1,5 +1,4 @@
-// FILE: server/index.js (FINAL - CORRECTED FILE PATH)
-
+// server/index.js
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -12,16 +11,8 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// --- DATABASE CONNECTION ---
-const isProductionApp = process.env.NODE_ENV === 'production';
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || `postgresql://postgres:Chal1234!@localhost:5432/eatery_app?sslmode=disable`,
-  ssl: isProductionApp ? { rejectUnauthorized: false } : false,
-});
-
-pool.query('SELECT NOW() AS now')
-  .then(res => console.log(`Successfully connected to ${isProductionApp ? 'PRODUCTION DB' : 'LOCAL DB'}.`))
-  .catch(err => console.error(`Error connecting to ${isProductionApp ? 'PRODUCTION DB' : 'LOCAL DB'}:`, err.stack));
+const pool = new Pool({ /* ... your db config ... */ });
+pool.query('SELECT NOW()').then(() => console.log('DB connected.'));
 
 
 // --- API ENDPOINTS ---
@@ -121,16 +112,10 @@ app.get('/api/eateries/:id', async (req, res) => {
 
 // --- STATIC FILE SERVING FOR PRODUCTION ---
 if (process.env.NODE_ENV === 'production') {
-  // --- THIS IS THE ONLY CHANGE - THE PATH IS NOW CORRECT ---
-  // The server is in /server, the build is in /build. We go up one level.
-  app.use(express.static(path.join(__dirname, '../build')));
-
+  app.use(express.static(path.join(__dirname, '../client/build')));
   app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../build/index.html'));
+    res.sendFile(path.join(__dirname, '../client/build/index.html'));
   });
 }
-  
-// --- START SERVER ---
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
