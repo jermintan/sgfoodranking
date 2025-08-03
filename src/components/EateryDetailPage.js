@@ -32,12 +32,26 @@ const EateryDetailPage = () => {
     fetchEateryDetails();
   }, [id]);
 
-  if (loading) { /* ... same as before ... */ }
-  if (error || !eatery) { /* ... same as before ... */ }
+  // Loading state
+  if (loading) {
+    return <div className="detail-page-container"><h2>Loading...</h2></div>;
+  }
 
+  // Error state
+  if (error || !eatery) {
+    return (
+      <div className="detail-page-container">
+        <Link to="/" className="back-link">← Back to all eateries</Link>
+        <h1>Eatery Not Found</h1>
+        <p>Sorry, we couldn't find the details for this eatery.</p>
+      </div>
+    );
+  }
+
+  // --- THIS IS THE FIX ---
+  // We only run this logic AFTER we've confirmed 'eatery' is not null.
   const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(eatery.name + ' ' + eatery.neighbourhood)}`;
 
-  // --- THIS LOGIC IS NOW CORRECTED AND SIMPLIFIED ---
   const hasPhotos = eatery.photos && eatery.photos.length > 0;
   
   const mainPhotoUrl = hasPhotos 
@@ -47,8 +61,9 @@ const EateryDetailPage = () => {
   const galleryPhotos = hasPhotos && eatery.photos.length > 1 
     ? eatery.photos.slice(1).map(photo => `https://places.googleapis.com/v1/${photo.name}/media?maxHeightPx=400&key=${API_KEY}`)
     : [];
-  // --- END OF CORRECTION ---
+  // --- END OF FIX ---
 
+  // Successful render
   return (
     <div className="detail-page-container">
       <Link to="/" className="back-link">← Back to all eateries</Link>
