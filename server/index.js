@@ -1,4 +1,4 @@
-// server/index.js
+// FILE: server/index.js (FINAL, UNIFIED VERSION)
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -11,8 +11,10 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-const pool = new Pool({ /* ... your db config ... */ });
-pool.query('SELECT NOW()').then(() => console.log('DB connected.'));
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+});
 
 
 // --- API ENDPOINTS ---
@@ -112,10 +114,12 @@ app.get('/api/eateries/:id', async (req, res) => {
 
 // --- STATIC FILE SERVING FOR PRODUCTION ---
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../client/build')));
+  app.use(express.static(path.join(__dirname, '../build')));
   app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../client/build/index.html'));
+    res.sendFile(path.join(__dirname, '../build/index.html'));
   });
 }
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
