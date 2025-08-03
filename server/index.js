@@ -1,21 +1,16 @@
-// FILE: server/index.js (FINAL DEPLOYMENT VERSION - Health Check Fix)
+// FILE: server/index.js (FINAL - Removed Image Proxy)
 
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
-const axios = require('axios');
 const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware
-app.use(express.json());
-// --- THIS IS THE ONLY CHANGE ---
-// Use a simpler CORS setup that is compatible with Render's health checks
 app.use(cors());
-// --- END OF CHANGE ---
+app.use(express.json());
 
 // --- DATABASE CONNECTION ---
 const isProductionApp = process.env.NODE_ENV === 'production';
@@ -25,12 +20,11 @@ const pool = new Pool({
 });
 
 pool.query('SELECT NOW() AS now')
-  .then(res => console.log(`Successfully connected to ${isProductionApp ? 'PRODUCTION DB (Render)' : 'LOCAL DB'}. Test query result:`, res.rows[0].now))
-  .catch(err => console.error(`Error connecting to ${isProductionApp ? 'PRODUCTION DB' : 'LOCAL DB'} on startup:`, err.stack));
+  .then(() => console.log(`Successfully connected to ${isProductionApp ? 'PRODUCTION DB' : 'LOCAL DB'}.`))
+  .catch(err => console.error(`Error connecting to ${isProductionApp ? 'PRODUCTION DB' : 'LOCAL DB'}:`, err.stack));
 
 
 // --- API ENDPOINTS ---
-// (Your existing, full-featured API endpoints are unchanged)
 app.get('/api/eateries', async (req, res) => {
   try {
     const page = parseInt(req.query.page, 10) || 1;
@@ -124,21 +118,7 @@ app.get('/api/eateries/:id', async (req, res) => {
   }
 });
 
-app.get('/api/image', async (req, res) => {
-  try {
-    const imageUrl = req.query.url;
-    if (!imageUrl) {
-      return res.status(400).send('Image URL is required');
-    }
-    const imageApiResponse = await axios({ method: 'GET', url: imageUrl, responseType: 'stream' });
-    res.setHeader('Content-Type', imageApiResponse.headers['content-type']);
-    imageApiResponse.data.pipe(res);
-  } catch (error) {
-    console.error('Image proxy error:', error.message);
-    if (error.response) { console.error('Image proxy error response status:', error.response.status); }
-    res.status(error.response?.status || 500).send('Error fetching image');
-  }
-});
+// --- The /api/image endpoint has been removed ---
 
 // --- STATIC FILE SERVING FOR PRODUCTION ---
 if (process.env.NODE_ENV === 'production') {
