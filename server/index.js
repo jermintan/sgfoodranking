@@ -122,33 +122,38 @@ if (process.env.NODE_ENV === 'production') {
 
 // --- API ENDPOINTS (…your existing /api/eateries routes) ---
 
-// ✅ Add photo proxy BEFORE the static catch-all
-// at top: add
 const { Readable } = require('node:stream');
 
 app.get('/api/photo', async (req, res) => {
   try {
-    const name = req.query.name;
-    if (!name) {
-      return res.status(400).send('Missing photo reference');
+    const { name, h = '400' } = req.query;
+    if (!name) return res.status(400).send('Missing photo name');
+
+    const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.MAPS_API_KEY;
+    if (!apiKey) return res.status(500).send('Maps API key not configured');
+
+    const url = `https://places.googleapis.com/v1/${name}/media?maxHeightPx=${h}&key=${apiKey}`;
+    const r = await fetch(url);
+
+    // Read the entire body so we can detect errors & send bytes
+    const ab = await r.arrayBuffer();
+    const buf = Buffer.from(ab);
+
+    const ct = r.headers.get('content-type') || '';
+    res.set('Cache-Control', 'public, max-age=86400, s-maxage=86400');
+
+    // If Google sent JSON, forward it so we can SEE the error
+    if (ct.includes('application/json')) {
+      res.set('Content-Type', 'application/json');
+      return res.status(r.status).send(buf);
     }
 
-    const photoUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${encodeURIComponent(name)}&key=${process.env.GOOGLE_API_KEY}`;
-    
-    const response = await fetch(photoUrl);
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`Google API error: ${errorText}`);
-      return res.status(response.status).send(errorText);
-    }
-
-    res.set('Content-Type', response.headers.get('content-type'));
-    response.body.pipe(res);
-    
-  } catch (err) {
-    console.error(err);
-    res.status(500).send('Error fetching photo');
+    // Otherwise, send the image bytes
+    res.set('Content-Type', ct || 'image/jpeg');
+    return res.status(r.status).send(buf);
+  } catch (e) {
+    console.error('Photo proxy error:', e);
+    res.sendStatus(500);
   }
 });
 
