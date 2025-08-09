@@ -2,25 +2,25 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 
 const ListingCard = ({ eatery }) => {
-  // --- THIS IS THE API KEY FROM YOUR FRONTEND ENVIRONMENT ---
-  // Ensure this is in a .env file in your project's ROOT directory
-  const API_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
+  // Use the same API base as EateryGrid
+  const API_BASE_URL =
+    process.env.NODE_ENV === 'production'
+      ? process.env.REACT_APP_API_URL   // e.g. https://your-render-service.onrender.com
+      : 'http://localhost:3001';
 
-  // --- THIS IS THE FIX ---
-  // Check if the photos array exists and has photos.
+  // Check if the photos array exists and has photos
   const hasPhotos = eatery.photos && eatery.photos.length > 0;
-  
-  // Construct the URL for the FIRST photo to use as the thumbnail.
+
+  // Build URL to your backend proxy
   const imageUrl = hasPhotos
-    ? `https://places.googleapis.com/v1/${eatery.photos[0].name}/media?maxHeightPx=400&key=${API_KEY}`
+    ? `${API_BASE_URL}/api/photo?name=${encodeURIComponent(eatery.photos[0].name)}&h=400`
     : 'https://via.placeholder.com/400x400.png?text=No+Image';
-  // --- END OF FIX ---
 
   return (
     <Link to={`/eatery/${eatery.id}`} className="listing-card-link">
       <div className="listing-card">
-        <div 
-          className="card-image-bg" 
+        <div
+          className="card-image-bg"
           style={{ backgroundImage: `url(${imageUrl})` }}
         >
         </div>

@@ -123,3 +123,37 @@ if (process.env.NODE_ENV === 'production') {
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+// --- API ENDPOINTS (…your existing /api/eateries routes) ---
+
+// ✅ Add photo proxy BEFORE the static catch-all
+app.get('/api/photo', async (req, res) => {
+  try {
+    const { name, h = '400' } = req.query; // name: "places/XXXX/photos/YYYY"
+    if (!name) return res.status(400).send('Missing photo name');
+
+    const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.MAPS_API_KEY;
+    if (!apiKey) return res.status(500).send('Maps API key not configured');
+
+    const url = `https://places.googleapis.com/v1/${name}/media?maxHeightPx=${h}&key=${apiKey}`;
+    const r = await fetch(url);
+    if (!r.ok) return res.sendStatus(r.status);
+
+    res.set('Content-Type', r.headers.get('content-type') || 'image/jpeg');
+    res.set('Cache-Control', 'public, max-age=86400, s-maxage=86400');
+    r.body.pipe(res);
+  } catch (e) {
+    console.error('Photo proxy error:', e);
+    res.sendStatus(500);
+  }
+});
+
+// --- STATIC FILE SERVING FOR PRODUCTION ---
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '../build')));
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../build/index.html'));
+  });
+}
+
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
