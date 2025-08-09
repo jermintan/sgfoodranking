@@ -123,9 +123,12 @@ if (process.env.NODE_ENV === 'production') {
 // --- API ENDPOINTS (…your existing /api/eateries routes) ---
 
 // ✅ Add photo proxy BEFORE the static catch-all
+// at top: add
+const { Readable } = require('node:stream');
+
 app.get('/api/photo', async (req, res) => {
   try {
-    const { name, h = '400' } = req.query; // name: "places/XXXX/photos/YYYY"
+    const { name, h = '400' } = req.query;
     if (!name) return res.status(400).send('Missing photo name');
 
     const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.MAPS_API_KEY;
@@ -137,12 +140,15 @@ app.get('/api/photo', async (req, res) => {
 
     res.set('Content-Type', r.headers.get('content-type') || 'image/jpeg');
     res.set('Cache-Control', 'public, max-age=86400, s-maxage=86400');
-    r.body.pipe(res);
+
+    // ✅ Convert Web stream -> Node stream
+    Readable.fromWeb(r.body).pipe(res);
   } catch (e) {
     console.error('Photo proxy error:', e);
     res.sendStatus(500);
   }
 });
+
 
 // --- STATIC FILE SERVING FOR PRODUCTION ---
 if (process.env.NODE_ENV === 'production') {
