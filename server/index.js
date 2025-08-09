@@ -120,10 +120,6 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
-
 // --- API ENDPOINTS (…your existing /api/eateries routes) ---
 
 // ✅ Add photo proxy BEFORE the static catch-all
