@@ -18,70 +18,127 @@ const pool = new Pool({
 });
 
 // ---- API: Eateries (list) ----
+// --- API ENDPOINTS ---
 app.get('/api/eateries', async (req, res) => {
   try {
-    const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 20;
-    const { is_halal, is_vegetarian, searchTerm, price, latitude, longitude, radius } = req.query;
+    // 1) Parse & normalize inputs
+    const page  = Math.max(parseInt(req.query.page, 10)  || 1, 1);
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 50);
+
+    const {
+      is_halal,
+      is_vegetarian,
+      searchTerm,
+      price,
+      latitude,
+      longitude,
+      radius      // expect kilometers
+    } = req.query;
 
     const offset = (page - 1) * limit;
-    let conditions = [];
-    let args = [];
-    let i = 1;
 
-    if (is_halal === 'true') { conditions.push(`is_halal = $${i++}`); args.push(true); }
-    if (is_vegetarian === 'true') { conditions.push(`is_vegetarian = $${i++}`); args.push(true); }
-    if (price && ['$','$$','$$$','$$$$'].includes(price)) { conditions.push(`price = $${i++}`); args.push(price); }
+    // 2) Build WHERE safely
+    const where = [];
+    const vals  = [];
+    let p = 1;
 
-    if (searchTerm && searchTerm.trim()) {
-      const patt = `%${searchTerm.trim()}%`;
-      const fields = ['name','cuisine','neighbourhood'];
-      conditions.push(`(${fields.map(() => `${fields.shift()} ILIKE $${i++}`).join(' OR ')})`);
-      args.push(patt, patt, patt);
+    // filters
+    if (is_halal === 'true') {
+      where.push(`is_halal = $${p++}`);
+      vals.push(true);
+    }
+    if (is_vegetarian === 'true') {
+      where.push(`is_vegetarian = $${p++}`);
+      vals.push(true);
+    }
+    if (price && ['$', '$$', '$$$', '$$$$'].includes(price)) {
+      where.push(`price = $${p++}`);
+      vals.push(price);
     }
 
-    const userLat = parseFloat(latitude);
-    const userLng = parseFloat(longitude);
-    const searchRadius = parseFloat(radius);
-
-    if (!isNaN(userLat) && !isNaN(userLng) && !isNaN(searchRadius) && searchRadius > 0) {
-      conditions.push(`haversine_distance($${i++}, $${i++}, latitude, longitude) <= $${i++}`);
-      args.push(userLat, userLng, searchRadius);
+    // search (make sure it never creates WHERE ())
+    if (searchTerm && searchTerm.trim() !== '') {
+      const like = `%${searchTerm.trim()}%`;
+      where.push(`(name ILIKE $${p} OR cuisine ILIKE $${p + 1} OR neighbourhood ILIKE $${p + 2})`);
+      vals.push(like, like, like);
+      p += 3;
     }
 
-    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    // location
+    const userLat = Number(latitude);
+    const userLng = Number(longitude);
+    const radiusKm = Number(radius);
+    const hasLocation =
+      Number.isFinite(userLat) &&
+      Number.isFinite(userLng) &&
+      Number.isFinite(radiusKm) &&
+      radiusKm > 0;
 
-    const countRes = await pool.query(`SELECT COUNT(*) FROM eateries ${where}`, args);
-    const totalItems = parseInt(countRes.rows[0].count, 10);
-    const totalPages = Math.ceil(totalItems / limit);
+    if (hasLocation) {
+      // Bind lat/lng/radius as params (don’t inline numbers)
+      where.push(`haversine_distance($${p}, $${p + 1}, latitude, longitude) <= $${p + 2}`);
+      vals.push(userLat, userLng, radiusKm);
+      p += 3;
+    }
 
-    const order =
-      (!isNaN(userLat) && !isNaN(userLng) && !isNaN(searchRadius) && searchRadius > 0)
-        ? `ORDER BY distance ASC, rating DESC, name ASC`
-        : `ORDER BY rating DESC, name ASC`;
+    const whereSQL = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
-    const dataArgs = args.slice();
-    const distSel = (!isNaN(userLat) && !isNaN(userLng))
-      ? `haversine_distance(${userLat}, ${userLng}, latitude, longitude) AS distance`
-      : `NULL AS distance`;
+    // 3) Count first
+    const countSQL = `SELECT COUNT(*)::int AS cnt FROM eateries ${whereSQL}`;
+    const { rows: countRows } = await pool.query(countSQL, vals);
+    const totalItems = countRows[0]?.cnt ?? 0;
+    const totalPages = Math.max(Math.ceil(totalItems / limit), 1);
 
-    dataArgs.push(limit, offset);
-    const dataRes = await pool.query(
-      `SELECT *, ${distSel} FROM eateries ${where} ${order} LIMIT $${i++} OFFSET $${i++}`,
-      dataArgs
-    );
+    // 4) Data query
+    // If we have location filtering, add distance & sort by distance then rating
+    const selectDistance = hasLocation
+      ? `, haversine_distance($${p}, $${p + 1}, latitude, longitude) AS distance`
+      : `, NULL AS distance`;
 
-    const eateries = dataRes.rows.map(e => ({
-      ...e,
-      photos: (typeof e.photos === 'string') ? JSON.parse(e.photos) : (e.photos || [])
-    }));
+    const orderSQL = hasLocation
+      ? `ORDER BY distance ASC, rating DESC, name ASC`
+      : `ORDER BY rating DESC, name ASC`;
 
-    res.json({ eateries, currentPage: page, totalPages, totalItems, itemsPerPage: limit });
+    const dataVals = hasLocation
+      ? [...vals, userLat, userLng, limit, offset]
+      : [...vals, limit, offset];
+
+    const dataSQL = `
+      SELECT id, place_id, name, cuisine, neighbourhood, rating, review_count, price,
+             photos, latitude, longitude, is_halal, is_vegetarian
+             ${selectDistance}
+      FROM eateries
+      ${whereSQL}
+      ${orderSQL}
+      LIMIT $${hasLocation ? p + 2 : p}
+      OFFSET $${hasLocation ? p + 3 : p + 1}
+    `;
+
+    const { rows } = await pool.query(dataSQL, dataVals);
+
+    // 5) Safe JSON parse for photos
+    const eateries = rows.map(e => {
+      let photos = [];
+      if (Array.isArray(e.photos)) photos = e.photos;
+      else if (typeof e.photos === 'string') {
+        try { photos = JSON.parse(e.photos); } catch { photos = []; }
+      }
+      return { ...e, photos };
+    });
+
+    res.json({
+      eateries,
+      currentPage: page,
+      totalPages,
+      totalItems,
+      itemsPerPage: limit
+    });
   } catch (err) {
-    console.error('Error executing query for all eateries:', err.stack);
+    console.error('Error executing query for all eateries:', err);
     res.status(500).send('Server Error retrieving eateries');
   }
 });
+
 
 // ---- API: Single eatery ----
 app.get('/api/eateries/:id', async (req, res) => {

@@ -1,5 +1,3 @@
-// FILE: src/components/EateryGrid.js
-
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import ListingCard from './ListingCard';
 import FilterModal from './FilterModal';
@@ -18,161 +16,150 @@ const EateryGrid = () => {
   const [activeFilters, setActiveFilters] = useState({
     price: null,
     isHalal: false,
-    isVegetarian: false
+    isVegetarian: false,
   });
   const [sortOrder, setSortOrder] = useState('default');
-  const [locationFilter, setLocationFilter] = useState(null); // Server-side filter trigger
+  const [locationFilter, setLocationFilter] = useState(null); // { lat, lon, radius }
   const [locationStatus, setLocationStatus] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
+  // Refs to detect changes
   const prevDebouncedSearchTermRef = useRef(debouncedSearchTerm);
   const prevActiveFiltersRef = useRef(activeFilters);
-  const prevLocationFilterRef = useRef(locationFilter); // Ref for location filter
+  const prevLocationFilterRef = useRef(locationFilter);
 
   // Debounce search term
   useEffect(() => {
-    const timerId = setTimeout(() => {
-      setDebouncedSearchTerm(searchTerm);
-    }, 500);
-    return () => clearTimeout(timerId);
+    const t = setTimeout(() => setDebouncedSearchTerm(searchTerm), 500);
+    return () => clearTimeout(t);
   }, [searchTerm]);
 
-  // Fetch eateries function
-  const fetchEateries = useCallback(async (pageToFetch = 1) => {
-    console.log("fetchEateries called with page:", pageToFetch, "Current locationFilter:", locationFilter); // DEBUG
-    setIsLoading(true);
-    const API_BASE_URL = process.env.NODE_ENV === 'production'
-      ? process.env.REACT_APP_API_URL
+  // Compute API base once
+  const API_BASE_URL =
+    process.env.NODE_ENV === 'production'
+      ? (process.env.REACT_APP_API_URL || window.location.origin)
       : 'http://localhost:3001';
 
-    const queryParams = new URLSearchParams();
-    queryParams.append('page', pageToFetch.toString());
-    queryParams.append('limit', eateriesData.itemsPerPage.toString());
+  // Fetch eateries
+  const fetchEateries = useCallback(
+    async (pageToFetch = 1) => {
+      setIsLoading(true);
 
-    if (activeFilters.isHalal) queryParams.append('is_halal', 'true');
-    if (activeFilters.isVegetarian) queryParams.append('is_vegetarian', 'true');
-    if (activeFilters.price) queryParams.append('price', activeFilters.price);
+      const q = new URLSearchParams();
+      q.set('page', String(pageToFetch));
+      q.set('limit', String(eateriesData.itemsPerPage));
 
-    if (debouncedSearchTerm && debouncedSearchTerm.trim() !== '') {
-      queryParams.append('searchTerm', debouncedSearchTerm.trim());
-    }
+      if (activeFilters.isHalal) q.set('is_halal', 'true');
+      if (activeFilters.isVegetarian) q.set('is_vegetarian', 'true');
+      if (activeFilters.price) q.set('price', activeFilters.price);
 
-    // *** ADD LOCATION PARAMS TO API CALL ***
-    if (locationFilter) {
-      queryParams.append('latitude', locationFilter.lat.toString());
-      queryParams.append('longitude', locationFilter.lon.toString());
-      queryParams.append('radius', locationFilter.radius.toString());
-    }
+      if (debouncedSearchTerm.trim() !== '') {
+        q.set('searchTerm', debouncedSearchTerm.trim());
+      }
 
-    try {
-      console.log("Fetching API with params:", queryParams.toString()); // DEBUG
-      const response = await fetch(`${API_BASE_URL}/api/eateries?${queryParams.toString()}`);
-      if (!response.ok) throw new Error(`Network response was not ok: ${response.statusText}`);
-      const data = await response.json();
-      console.log("API Data Received:", data); // DEBUG
-      
-      setEateriesData({
-        list: data.eateries || [],
-        currentPage: data.currentPage || 1,
-        totalPages: data.totalPages || 0,
-        itemsPerPage: data.itemsPerPage || eateriesData.itemsPerPage,
-      });
+      // Location params
+      if (locationFilter) {
+        const { lat, lon, radius } = locationFilter;
+        const latN = Number(lat);
+        const lonN = Number(lon);
+        const radN = Number(radius);
+        if (Number.isFinite(latN) && Number.isFinite(lonN) && Number.isFinite(radN) && radN > 0) {
+          q.set('latitude', String(latN));
+          q.set('longitude', String(lonN));
+          q.set('radius', String(radN));
+        }
+      }
 
-    } catch (error) {
-      console.error("Failed to fetch eateries:", error);
-      setEateriesData(prev => ({ ...prev, list: [], totalPages: 0, currentPage: 1 }));
-    } finally {
-      setIsLoading(false);
-    }
-  // *** ADD locationFilter TO useCallback DEPENDENCIES ***
-  }, [activeFilters, eateriesData.itemsPerPage, debouncedSearchTerm, locationFilter]);
+      try {
+        const resp = await fetch(`${API_BASE_URL}/api/eateries?${q.toString()}`);
+        if (!resp.ok) throw new Error(`Request failed (${resp.status})`);
+        const data = await resp.json();
 
-  // Main useEffect for fetching data and handling page resets
+        setEateriesData(prev => ({
+          list: data.eateries || [],
+          currentPage: data.currentPage || 1,
+          totalPages: data.totalPages || 0,
+          itemsPerPage: data.itemsPerPage || prev.itemsPerPage,
+        }));
+      } catch (err) {
+        console.error('Failed to fetch eateries:', err);
+        setEateriesData(prev => ({ ...prev, list: [], totalPages: 0, currentPage: 1 }));
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [API_BASE_URL, activeFilters, debouncedSearchTerm, eateriesData.itemsPerPage, locationFilter]
+  );
+
+  // React to changes (search/filters/location/page)
   useEffect(() => {
-    console.log("Main useEffect triggered. Deps:", {debouncedSearchTerm, activeFilters, locationFilter, currentPage: eateriesData.currentPage}); // DEBUG
     const searchChanged = debouncedSearchTerm !== prevDebouncedSearchTermRef.current;
     const filtersChanged = JSON.stringify(activeFilters) !== JSON.stringify(prevActiveFiltersRef.current);
-    // *** USE JSON.stringify FOR OBJECT COMPARISON FOR locationFilterChanged ***
-    const locationFilterChanged = JSON.stringify(locationFilter) !== JSON.stringify(prevLocationFilterRef.current);
+    const locChanged = JSON.stringify(locationFilter) !== JSON.stringify(prevLocationFilterRef.current);
 
     let pageToFetch = eateriesData.currentPage;
-    let needsPageReset = false;
+    let reset = false;
 
-    if (searchChanged || filtersChanged || locationFilterChanged) {
-      console.log("Change detected:", {searchChanged, filtersChanged, locationFilterChanged}); // DEBUG
+    if (searchChanged || filtersChanged || locChanged) {
       pageToFetch = 1;
-      needsPageReset = true;
-      // Update refs *after* determining a change has occurred
+      reset = true;
       prevDebouncedSearchTermRef.current = debouncedSearchTerm;
       prevActiveFiltersRef.current = activeFilters;
       prevLocationFilterRef.current = locationFilter;
     }
-    
+
     fetchEateries(pageToFetch);
 
-    if (needsPageReset && eateriesData.currentPage !== 1) {
-        console.log("Resetting currentPage state to 1"); // DEBUG
-        setEateriesData(prev => ({ ...prev, currentPage: 1 }));
+    if (reset && eateriesData.currentPage !== 1) {
+      setEateriesData(prev => ({ ...prev, currentPage: 1 }));
     }
-  // *** ADD locationFilter TO useEffect DEPENDENCIES ***
   }, [debouncedSearchTerm, activeFilters, locationFilter, eateriesData.currentPage, fetchEateries]);
 
+  const handleApplyFilters = newFilters => setActiveFilters(newFilters);
 
-  const handleApplyFilters = (newFilters) => {
-    setActiveFilters(newFilters);
-  };
-  
-  const handlePageChange = (newPage) => {
+  const handlePageChange = newPage => {
     if (newPage !== eateriesData.currentPage) {
-        setEateriesData(prev => ({ ...prev, currentPage: newPage }));
-        window.scrollTo(0, 0);
+      setEateriesData(prev => ({ ...prev, currentPage: newPage }));
+      window.scrollTo(0, 0);
     }
   };
 
   const handleGetLocation = () => {
-    console.log("handleGetLocation called"); // DEBUG
     if (!navigator.geolocation) {
-      setLocationStatus('Geolocation is not supported.'); return;
+      setLocationStatus('Geolocation is not supported.');
+      return;
     }
     setLocationStatus('Getting your location...');
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const newLocation = { lat: position.coords.latitude, lon: position.coords.longitude, radius: 1 };
-        console.log("Location obtained, setting filter:", newLocation); // DEBUG
+      pos => {
+        // choose any default radius (km). 2km is a friendly default.
+        const updated = { lat: pos.coords.latitude, lon: pos.coords.longitude, radius: 2 };
+        setLocationFilter(updated);
         setLocationStatus('');
-        setLocationFilter(newLocation);
       },
-      (error) => { 
-        console.error("Error getting location:", error); // DEBUG
-        setLocationStatus(`Error: ${error.message}`); 
+      err => {
+        console.error('Geolocation error:', err);
+        setLocationStatus(`Error: ${err.message}`);
       }
     );
   };
 
   const clearLocationFilter = () => {
-    console.log("clearLocationFilter called"); // DEBUG
     setLocationFilter(null);
     setLocationStatus('');
   };
 
   const processedEateries = useMemo(() => {
-    // Server handles all filtering (Halal, Veg, Search, Price, Location).
-    // This list is the direct result from the server for the current page.
-    let eateriesToShow = [...eateriesData.list];
-
-    // Client-side sorting can still be applied to the server-filtered, paginated list.
-    const localSortOrder = sortOrder;
-    if (localSortOrder !== 'default') {
-        eateriesToShow = [...eateriesToShow].sort((a, b) => {
-            if (localSortOrder === 'reviews') return (b.review_count || 0) - (a.review_count || 0);
-            if (localSortOrder === 'name') return (a.name || '').localeCompare(b.name || '');
-            return 0;
-        });
+    let list = [...eateriesData.list];
+    if (sortOrder !== 'default') {
+      list = [...list].sort((a, b) => {
+        if (sortOrder === 'reviews') return (b.review_count || 0) - (a.review_count || 0);
+        if (sortOrder === 'name') return (a.name || '').localeCompare(b.name || '');
+        return 0;
+      });
     }
-    return eateriesToShow;
-  // Dependencies now only reflect what client-side processing is done on eateriesData.list
+    return list;
   }, [eateriesData.list, sortOrder]);
-
 
   return (
     <>
@@ -196,12 +183,17 @@ const EateryGrid = () => {
 
         <div className="active-filters-container">
           {locationStatus && <p className="location-status">{locationStatus}</p>}
-          {locationFilter && ( <div className="location-filter-active"><span>Showing results within {locationFilter.radius}km of your location.</span><button onClick={clearLocationFilter} className="clear-location-filter">Clear</button></div>)}
+          {locationFilter && (
+            <div className="location-filter-active">
+              <span>Showing results within {locationFilter.radius}km of your location.</span>
+              <button onClick={clearLocationFilter} className="clear-location-filter">Clear</button>
+            </div>
+          )}
           {activeFilters.isHalal && <span className="active-filter-tag">Halal</span>}
           {activeFilters.isVegetarian && <span className="active-filter-tag">Vegetarian</span>}
           {activeFilters.price && <span className="active-filter-tag">Price: {activeFilters.price}</span>}
         </div>
-        
+
         {isLoading ? (
           <p className="loading-message">Loading eateries...</p>
         ) : processedEateries.length > 0 ? (
