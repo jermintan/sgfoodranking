@@ -9,34 +9,20 @@ body {
 
 /* --- Header Styles --- */
 .main-header {
-  padding: 20px 80px;
+  padding: 16px 32px;            /* tighter sides */
   border-bottom: 1px solid #ebebeb;
   justify-content: space-between;
   display: flex;
 }
-.header-logo-png {
-  height: 32px; /* Adjust as needed */
-  width: 32px;  /* Adjust as needed, or use 'auto' for one dimension if you want to maintain aspect ratio */
-  display: block; /* Matches the SVG's display style */
-  /* Add any other styling like margin-right if needed */
-}
-.logo-container {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.logo-text {
-  font-size: 22px;
-  font-weight: 600;
-  color: #ca0000;
-}
+.header-logo-png { height: 32px; width: 32px; display: block; }
+.logo-container { display: flex; align-items: center; gap: 8px; }
+.logo-text { font-size: 22px; font-weight: 600; color: #ca0000; }
 
 /* --- Eatery Grid Container --- */
 .eatery-grid-container {
-  /* This is the key change for centering the content */
-  max-width: 1440px;     /* Set a maximum width for the whole content block */
-  margin: 0 auto;        /* Center the block horizontally on the page */
-  padding: 24px 40px;    /* Maintain vertical padding and side padding for smaller screens */
+  max-width: 1680px;             /* wider content area */
+  margin: 0 auto;
+  padding: 20px 24px;            /* less horizontal padding */
 }
 
 /* --- Search Bar --- */
@@ -44,12 +30,12 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 40px;
+  gap: 14px;
+  margin-bottom: 28px;           /* slightly tighter */
 }
 .search-input {
   width: 100%;
-  max-width: 400px;
+  max-width: 520px;              /* larger input so center row feels balanced */
   padding: 14px 20px;
   border: 1px solid #ddd;
   border-radius: 30px;
@@ -57,7 +43,7 @@ body {
   box-shadow: 0 1px 2px rgba(0,0,0,0.08);
 }
 .filter-button {
-  padding: 14px 24px;
+  padding: 14px 20px;
   border-radius: 30px;
   border: 1px solid #ddd;
   background-color: #fff;
@@ -69,306 +55,118 @@ body {
 /* --- The Grid Itself --- */
 .eatery-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  /* This is the key change for the gap between cards */
-  gap: 28px;             /* Reduce the space between cards */
-
+  /* auto-fill with larger cards; adapts to screen width */
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 24px;                     /* a touch tighter than before */
 }
 
-/* --- The New Listing Card --- */
+/* --- Listing Card --- */
 .listing-card {
   display: block;
   align-items: center;
   gap: 16px;
-  /* Remove borders or shadows for a cleaner, inline look */
 }
+
+/* Bigger, nicer images */
 .card-image-bg {
   width: 100%;
-  height: 200px;
-  flex-shrink: 0;
-  border-radius: 8px;
-  background-color: #f0f0f0; /* A light grey fallback for broken links */
-  background-size: cover;      /* This makes the image fill the container */
-  background-position: center; /* This centers the image */
+  aspect-ratio: 4 / 3;           /* larger visual area; responsive height */
+  border-radius: 12px;
+  background-color: #f0f0f0;
+  background-size: cover;
+  background-position: center;
 }
-.card-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.card-details {
-  display: flex;
-  flex-direction: column;
-  margin-top: 8px;
-}
-.card-title {
-  margin: 0 0 2px 0;
-  font-size: 14px;
-  font-weight: 600;
-}
-.card-subtitle {
-  margin: 0 0 4px 0;
-  font-size: 12px;
-  color: #717171;
-}
-.card-info-line {
-  display: flex;
-  align-items: center;
-  font-size: 14px;
-  gap: 4px;
-}
+.card-image { width: 100%; height: 100%; object-fit: cover; }
+
+.card-details { display: flex; flex-direction: column; margin-top: 10px; }
+.card-title { margin: 0 0 2px 0; font-size: 15px; font-weight: 600; }
+.card-subtitle { margin: 0 0 4px 0; font-size: 12px; color: #717171; }
+.card-info-line { display: flex; align-items: center; font-size: 14px; gap: 4px; }
 .card-reviews { color: #717171; }
 .card-price { margin-left: 8px; font-weight: 600; }
 
-
-
 /* --- Tablet Responsiveness --- */
 @media (max-width: 1024px) {
-  .main-header,
-  .eatery-grid-container {
-    padding-left: 40px;
-    padding-right: 40px;
-  }
-  .eatery-grid {
-    grid-template-columns: repeat(2, 1fr); /* 2 columns on tablets */
-  }
+  .main-header, .eatery-grid-container { padding-left: 24px; padding-right: 24px; }
+  .eatery-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
 }
 
 /* --- Mobile Responsiveness --- */
 @media (max-width: 768px) {
-  .main-header,
-  .eatery-grid-container {
-    padding: 20px 24px;
-  }
+  .main-header, .eatery-grid-container { padding: 16px 16px; }
 
   .eatery-grid {
-    grid-template-columns: 1fr; /* 1 column on mobile */
-    gap: 32px; /* Increase gap for vertical stacking */
-    margin-top: 20px;
-
-  }
-  .search-bar-container {
-    flex-wrap: wrap; 
-    margin-bottom: -20px;/* Allow items to wrap */
-    /* The gap will apply between the search input row and the button row */
+    grid-template-columns: 1fr;  /* single column for big, pleasing images */
+    gap: 28px;
+    margin-top: 16px;
   }
 
-  .search-input {
-    width: 100%;     /* Search input takes full width, moving to its own line */
-    order: 1;        /* Visually first */
-    margin-bottom: 8px; /* Space between search row and button row */
-    flex-grow: 0; /* Reset grow for mobile if it was set for desktop */
-  }
+  .search-bar-container { flex-wrap: wrap; gap: 10px; margin-bottom: -10px; }
 
-  /* Group the remaining buttons. We can wrap them in a div in JSX for easier control,
-     OR try to control them with flex properties directly if source order is fixed.
-     Let's try without an extra div first. */
+  .search-input { width: 100%; order: 1; margin-bottom: 8px; }
+  .location-icon-button { order: 2; }
+  .sort-dropdown { order: 3; flex-grow: 1; min-width: 120px; }
+  .filter-button { order: 4; }
 
-  .location-icon-button {
-    order: 2; /* First on the second row */
-    /* flex-grow: 0; default */
-    /* flex-shrink: 0; default from above */
-  }
-
-  .sort-dropdown {
-    order: 3; /* Second on the second row */
-    flex-grow: 1; /* Allow sort to take up more space on the button row */
-    min-width: 120px; /* Example: Ensure it has some minimum width */
-  }
-
-  .filter-button {
-    order: 4; /* Third on the second row */
-    /* flex-grow: 0; default */
-    /* flex-shrink: 0; default from above */
-  }
-  .listing-card {
-    display: flex;
-  }
-  .card-image-bg {
-    width: 200px;
-  }
-  .location-filter-active {
-    margin-top: 40px;
-  }
-  .main-header {
-    display: block;
-  }
+  .listing-card { display: flex; gap: 14px; }
+  .card-image-bg { width: 200px; aspect-ratio: 1 / 1; } /* square preview beside text */
+  .location-filter-active { margin-top: 32px; }
+  .main-header { display: block; }
 }
 
 /* --- Filter Modal Styles --- */
 .filter-modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  position: fixed; inset: 0;
   background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
+  display: flex; align-items: center; justify-content: center; z-index: 1000;
 }
-
 .filter-modal-content {
-  background: white;
-  width: 90%;
-  max-width: 500px;
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-  display: flex;
-  flex-direction: column;
+  background: white; width: 90%; max-width: 500px; border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.2); display: flex; flex-direction: column;
 }
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 24px;
-  border-bottom: 1px solid #ebebeb;
-}
-.modal-header h3 {
-  margin: 0;
-  font-size: 18px;
-}
-.close-button {
-  background: none;
-  border: none;
-  font-size: 24px;
-  cursor: pointer;
-}
-
-.modal-body {
-  padding: 24px;
-  overflow-y: auto;
-}
-
-.filter-section {
-  margin-bottom: 24px;
-}
-.filter-section h4 {
-  margin: 0 0 16px 0;
-  font-size: 16px;
-}
-
-.button-group {
-  display: flex;
-  gap: 12px;
-}
-.price-button {
-  flex-grow: 1;
-  padding: 12px;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  background: white;
-  font-size: 14px;
-  cursor: pointer;
-}
-.price-button.active {
-  background: #222;
-  color: white;
-  border-color: #222;
-}
-
-.checkbox-group {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-}
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-}
-.checkbox-label input {
-  width: 20px;
-  height: 20px;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: space-between;
-  padding: 16px 24px;
-  border-top: 1px solid #ebebeb;
-}
-.clear-button, .apply-button {
-  padding: 12px 20px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.clear-button {
-  background: none;
-  border: none;
-  text-decoration: underline;
-}
-.apply-button {
-  background-color: #222;
-  color: white;
-  border: none;
-}
+.modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; border-bottom: 1px solid #ebebeb; }
+.modal-header h3 { margin: 0; font-size: 18px; }
+.close-button { background: none; border: none; font-size: 24px; cursor: pointer; }
+.modal-body { padding: 24px; overflow-y: auto; }
+.filter-section { margin-bottom: 24px; }
+.filter-section h4 { margin: 0 0 16px 0; font-size: 16px; }
+.button-group { display: flex; gap: 12px; }
+.price-button { flex-grow: 1; padding: 12px; border: 1px solid #ccc; border-radius: 8px; background: white; font-size: 14px; cursor: pointer; }
+.price-button.active { background: #222; color: white; border-color: #222; }
+.checkbox-group { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.checkbox-label { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.checkbox-label input { width: 20px; height: 20px; }
+.modal-footer { display: flex; justify-content: space-between; padding: 16px 24px; border-top: 1px solid #ebebeb; }
+.clear-button, .apply-button { padding: 12px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.clear-button { background: none; border: none; text-decoration: underline; }
+.apply-button { background-color: #222; color: white; border: none; }
 
 .no-results-message {
-  grid-column: 1 / -1; /* Make message span all columns */
+  grid-column: 1 / -1;
   text-align: center;
   color: #717171;
   padding: 40px;
 }
 
 /* --- Routing Styles --- */
-
-/* Remove default link styling from the listing card */
-.listing-card-link {
-  text-decoration: none;
-  color: inherit;
-}
+.listing-card-link { text-decoration: none; color: inherit; }
 
 /* --- Detail Page Styles --- */
-.detail-page-container {
-  max-width: 900px;
-  margin: 24px auto;
-  padding: 0 24px;
-}
-.back-link {
-  display: inline-block;
-  margin-bottom: 24px;
-  text-decoration: none;
-  color: #222;
-  font-weight: 600;
-}
-.detail-header {
-  display: flex;
-  gap: 24px;
-  margin-bottom: 32px;
-}
+.detail-page-container { max-width: 960px; margin: 24px auto; padding: 0 24px; }
+.back-link { display: inline-block; margin-bottom: 24px; text-decoration: none; color: #222; font-weight: 600; }
+.detail-header { display: flex; gap: 24px; margin-bottom: 32px; }
 .detail-image {
-  width: 400px;
-  height: 300px;
+  width: 480px;              /* bigger detail hero */
+  aspect-ratio: 4 / 3;
   border-radius: 12px;
-  
-  /* --- THE FIX --- */
-  background-color: #f0f0f0;    /* A nice fallback color */
-  background-size: cover;       /* This tells the BACKGROUND to cover the area */
-  background-position: center;  /* This centers the BACKGROUND image */
+  background-color: #f0f0f0;
+  background-size: cover;
+  background-position: center;
 }
-.detail-title-section h1 {
-  margin: 0 0 8px 0;
-}
-.detail-title-section p {
-  margin: 4px 0;
-  font-size: 16px;
-  color: #717171;
-}
-.detail-rating {
-  font-weight: 600;
-  color: #222 !important;
-}
-.detail-body h2 {
-  border-bottom: 1px solid #ebebeb;
-  padding-bottom: 16px;
-  margin-bottom: 16px;
-}
+.detail-title-section h1 { margin: 0 0 8px 0; }
+.detail-title-section p { margin: 4px 0; font-size: 16px; color: #717171; }
+.detail-rating { font-weight: 600; color: #222 !important; }
+.detail-body h2 { border-bottom: 1px solid #ebebeb; padding-bottom: 16px; margin-bottom: 16px; }
 
 /* --- Sorting Dropdown Styles --- */
 .sort-dropdown {
@@ -379,253 +177,85 @@ body {
   font-weight: 600;
   font-size: 14px;
   cursor: pointer;
-  -webkit-appearance: none; /* Removes default OS styling */
-  -moz-appearance: none;
-  appearance: none;
+  -webkit-appearance: none; -moz-appearance: none; appearance: none;
   background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23222222%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22/%3E%3C/svg%3E');
   background-repeat: no-repeat;
   background-position: right 1rem center;
   background-size: .65em auto;
-  padding-right: 2.5rem; /* Make space for the arrow */
+  padding-right: 2.5rem;
 }
 
 /* Adjust search bar width to make room for the sort dropdown */
-.search-input {
-  max-width: 320px;
-}
+.search-input { max-width: 520px; }
 
 /* --- Location Feature Styles --- */
 .location-icon-button {
-  flex-shrink: 0; /* Prevents the button from shrinking */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 48px;  /* Match the height of other inputs */
-  height: 48px;
-  border-radius: 50%; /* Make it a circle */
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  width: 48px; height: 48px;
+  border-radius: 50%;
   border: 1px solid #ddd;
   background-color: #fff;
-  font-size: 20px;
-  cursor: pointer;
-  transition: background-color 0.2s;
+  font-size: 20px; cursor: pointer; transition: background-color 0.2s;
 }
-
-.location-icon-button:hover {
-  background-color: #f7f7f7;
-}
+.location-icon-button:hover { background-color: #f7f7f7; }
 
 /* --- Active Filter Display --- */
-.active-filters-container {
-  text-align: center;
-  margin-bottom: 24px;
-  min-height: 20px; /* Prevent layout shift */
-}
+.active-filters-container { text-align: center; margin-bottom: 20px; min-height: 20px; }
 .location-filter-active {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  background-color: #f0f0f0;
-  padding: 8px 16px;
-  border-radius: 20px;
-  font-size: 14px;
+  display: inline-flex; align-items: center; gap: 12px;
+  background-color: #f0f0f0; padding: 8px 16px; border-radius: 20px; font-size: 14px;
 }
-.clear-location-filter {
-  background: none;
-  border: none;
-  font-weight: 600;
-  text-decoration: underline;
-  cursor: pointer;
-}
+.clear-location-filter { background: none; border: none; font-weight: 600; text-decoration: underline; cursor: pointer; }
 
 /* --- Detail Page Action Buttons --- */
-.detail-actions {
-  display: flex;
-  gap: 12px;
-  margin-top: 16px;
-}
-
+.detail-actions { display: flex; gap: 12px; margin-top: 16px; }
 .action-button {
-  display: inline-block;
-  padding: 10px 16px;
-  border-radius: 8px;
-  text-decoration: none;
-  font-weight: 600;
-  font-size: 14px;
-  text-align: center;
-  transition: transform 0.1s ease-in-out;
+  display: inline-block; padding: 10px 16px; border-radius: 8px; text-decoration: none;
+  font-weight: 600; font-size: 14px; text-align: center; transition: transform 0.1s ease-in-out;
 }
+.action-button:hover { transform: translateY(-2px); }
+.maps-button { background-color: #4285F4; color: white; }
+.grab-button { background-color: #00B14F; color: white; }
 
-.action-button:hover {
-  transform: translateY(-2px);
-}
-
-.maps-button {
-  background-color: #4285F4; /* Google's blue */
-  color: white;
-}
-
-.grab-button {
-  background-color: #00B14F; /* Grab's green */
-  color: white;
-}
-
-/* In App.css or your main CSS file */
+/* Pagination */
 .pagination-controls {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  margin-top: 40px;
-  margin-bottom: 20px;
-  flex-wrap: wrap; /* Allow buttons to wrap on smaller screens */
+  display: flex; justify-content: center; align-items: center;
+  margin-top: 32px; margin-bottom: 16px; flex-wrap: wrap;
 }
-
 .pagination-button {
-  background-color: #f0f0f0;
-  border: 1px solid #ddd;
-  color: #333;
-  padding: 8px 12px;
-  margin: 0 4px;
-  cursor: pointer;
-  border-radius: 4px;
-  transition: background-color 0.2s;
+  background-color: #f0f0f0; border: 1px solid #ddd; color: #333;
+  padding: 8px 12px; margin: 0 4px; cursor: pointer; border-radius: 4px; transition: background-color 0.2s;
 }
+.pagination-button:hover:not(:disabled) { background-color: #e0e0e0; }
+.pagination-button:disabled { color: #aaa; cursor: not-allowed; background-color: #f9f9f9; }
+.pagination-button.active { background-color: #007bff; color: white; border-color: #007bff; }
+.pagination-ellipsis { padding: 8px 6px; margin: 0 2px; color: #777; }
 
-.pagination-button:hover:not(:disabled) {
-  background-color: #e0e0e0;
-}
-
-.pagination-button:disabled {
-  color: #aaa;
-  cursor: not-allowed;
-  background-color: #f9f9f9;
-}
-
-.pagination-button.active {
-  background-color: #007bff; /* Or your primary color */
-  color: white;
-  border-color: #007bff; /* Or your primary color */
-}
-
-.pagination-ellipsis {
-  padding: 8px 6px;
-  margin: 0 2px;
-  color: #777;
-}
-
-
-@media (max-width: 438px) { /* Example: A point just above where it might break */
-  .sort-dropdown {
-    /* If the sort dropdown text is too long, it might be the culprit.
-       You could reduce its padding or font-size here. */
-    font-size: 0.85em; /* Slightly smaller */
-    padding: 16px 10px;
-    min-width: 0; /* Allow it to shrink more if needed, relying on content */
-  }
-
-  .filter-button {
-    font-size: 0.85em;
-    padding: 16px 10px;
-  }
-
-  .search-bar-container {
-    gap: 6px;
-    padding-bottom: 10px; /* Slightly reduce gap if space is very tight */
-  }
+@media (max-width: 438px) {
+  .sort-dropdown { font-size: 0.85em; padding: 14px 10px; min-width: 0; }
+  .filter-button { font-size: 0.85em; padding: 14px 10px; }
+  .search-bar-container { gap: 6px; padding-bottom: 8px; }
 }
 
 /* --- Photo Gallery Styles --- */
-.photo-gallery-section {
-  margin-top: 40px;
-  padding-top: 20px;
-  border-top: 1px solid #eee;
-}
-
-.photo-gallery-section h2 {
-  font-size: 1.5rem;
-  margin-bottom: 20px;
-}
-
-.photo-gallery-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 15px;
-}
-
+.photo-gallery-section { margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; }
+.photo-gallery-section h2 { font-size: 1.5rem; margin-bottom: 20px; }
+.photo-gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; }
 .gallery-photo-container {
-  width: 100%;
-  padding-top: 100%; /* Creates a square aspect ratio */
-  position: relative;
-  border-radius: 8px;
-  overflow: hidden;
-  background-color: #f0f0f0;
-  cursor: pointer;
+  width: 100%; padding-top: 100%; position: relative; border-radius: 8px; overflow: hidden;
+  background-color: #f0f0f0; cursor: pointer;
 }
-
-.gallery-photo {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover; /* Ensures the image covers the square area */
-}
+.gallery-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 
 /* Lightbox */
-.lightbox-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.9);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-  cursor: zoom-out;
-  touch-action: pan-y; /* allow horizontal swipes */
-}
-
-.lightbox-image {
-  max-width: 94vw;
-  max-height: 94vh;
-  border-radius: 10px;
-  box-shadow: 0 8px 40px rgba(0,0,0,0.6);
-  cursor: default;
-}
-
-.lightbox-close {
-  position: absolute;
-  top: 14px;
-  right: 18px;
-  font-size: 26px;
-  line-height: 26px;
-  width: 38px;
-  height: 38px;
-  border-radius: 999px;
-  border: none;
-  background: rgba(255,255,255,0.14);
-  color: #fff;
-  cursor: pointer;
-}
-
-.lightbox-nav {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 44px;
-  line-height: 44px;
-  width: 54px;
-  height: 54px;
-  border-radius: 999px;
-  border: none;
-  background: rgba(255,255,255,0.14);
-  color: #fff;
-  cursor: pointer;
-  user-select: none;
-}
-
+.lightbox-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 9999; cursor: zoom-out; touch-action: pan-y; }
+.lightbox-image { max-width: 94vw; max-height: 94vh; border-radius: 10px; box-shadow: 0 8px 40px rgba(0,0,0,0.6); cursor: default; }
+.lightbox-close { position: absolute; top: 14px; right: 18px; font-size: 26px; line-height: 26px; width: 38px; height: 38px; border-radius: 999px; border: none; background: rgba(255,255,255,0.14); color: #fff; cursor: pointer; }
+.lightbox-nav { position: absolute; top: 50%; transform: translateY(-50%); font-size: 44px; line-height: 44px; width: 54px; height: 54px; border-radius: 999px; border: none; background: rgba(255,255,255,0.14); color: #fff; cursor: pointer; user-select: none; }
 .lightbox-prev { left: 14px; }
 .lightbox-next { right: 14px; }
 
-/* Make tap targets comfy on mobile */
 @media (max-width: 640px) {
   .lightbox-nav { font-size: 38px; width: 48px; height: 48px; }
   .lightbox-close { width: 36px; height: 36px; font-size: 22px; }
