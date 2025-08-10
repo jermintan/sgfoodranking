@@ -45,10 +45,7 @@ const HALAL_GUARANTEE_TERMS = [
 ];
 
 const INCLUDED_TYPES = ["restaurant","meal_takeaway","cafe","bakery","food_court"];
-
-const EXCLUDE_IF_TYPE_INCLUDES = new Set([
-  "mosque","church","hindu_temple","synagogue","place_of_worship"
-]);
+const EXCLUDE_IF_TYPE_INCLUDES = new Set(["mosque","church","hindu_temple","synagogue","place_of_worship"]);
 
 const priceLevelMap = {
   PRICE_LEVEL_UNSPECIFIED: '$',
@@ -88,12 +85,8 @@ const looksLikeDish = (place, dish) => {
   return list.some(t => hay.includes(t));
 };
 
-const inSingapore = (place) => {
-  const a = place.formattedAddress || '';
-  return /singapore/i.test(a);
-};
-
-const hasPhoto = (place) => Array.isArray(place.photos) && place.photos.length > 1;
+const inSingapore = (place) => /singapore/i.test(place.formattedAddress || '');
+const hasPhoto = (place) => Array.isArray(place.photos) && place.photos.length > 0;
 
 const isEatery = (place) => {
   const types = place.types || [];
@@ -124,7 +117,6 @@ const buildNearbyBody = ({ center, pageToken }) => {
   const body = {
     includedTypes: INCLUDED_TYPES,
     maxResultCount: 20,
-    pageSize: 20,
     locationRestriction: {
       circle: {
         center: { latitude: center.lat, longitude: center.lng },
@@ -132,7 +124,8 @@ const buildNearbyBody = ({ center, pageToken }) => {
       }
     },
     languageCode: "en-SG",
-    regionCode: "SG"
+    regionCode: "SG",
+    rankPreference: "POPULARITY"
   };
   if (pageToken) body.pageToken = pageToken;
   return body;
