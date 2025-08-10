@@ -5,8 +5,8 @@ const { Pool } = require('pg');
 
 const SCRIPT_MODE = 'production';
 const CONFIGS = {
-  test:        { maxQueries: 5,  maxPages: 2, logMessage: "Starting TEST seed..." },
-  production:  { maxQueries: 25, maxPages: 5, logMessage: "Starting FULL seed..." }
+  test:        { logMessage: "Starting TEST seed...",    maxPages: 3,  perPageDelayMs: 2000, betweenCallsMs: 250 },
+  production:  { logMessage: "Starting FULL seed...",    maxPages: 5,  perPageDelayMs: 2000, betweenCallsMs: 150 }
 };
 const CONFIG = CONFIGS[SCRIPT_MODE];
 
@@ -20,9 +20,7 @@ const seedPoolConfig = { connectionString: seedConnectionString };
 if (isProductionSeed) seedPoolConfig.ssl = { rejectUnauthorized: false };
 const pool = new Pool(seedPoolConfig);
 
-// Whether to wipe the table first.
-// Default: test/dev = true, production = false (append).
-// You can override by setting FORCE_TRUNCATE=true in env.
+// Truncate policy
 const SHOULD_TRUNCATE =
   process.env.FORCE_TRUNCATE === 'true'
     ? true
@@ -36,6 +34,50 @@ const PLACES_API_NEW_URL = 'https://places.googleapis.com/v1/places:searchText';
 const FIELD_MASK =
   'places.id,places.displayName,places.types,places.formattedAddress,places.rating,places.userRatingCount,places.priceLevel,places.location,places.photos';
 
+// --- Tiles (9 rectangles over Singapore) ---
+const SG_TILES = [
+  // NW, N, NE
+  { ne: { lat: 1.470, lng: 103.820 }, sw: { lat: 1.420, lng: 103.700 } },
+  { ne: { lat: 1.470, lng: 103.880 }, sw: { lat: 1.420, lng: 103.820 } },
+  { ne: { lat: 1.470, lng: 103.960 }, sw: { lat: 1.420, lng: 103.880 } },
+
+  // W, C, E
+  { ne: { lat: 1.420, lng: 103.820 }, sw: { lat: 1.360, lng: 103.700 } },
+  { ne: { lat: 1.420, lng: 103.880 }, sw: { lat: 1.360, lng: 103.820 } },
+  { ne: { lat: 1.420, lng: 103.960 }, sw: { lat: 1.360, lng: 103.880 } },
+
+  // SW, S, SE
+  { ne: { lat: 1.360, lng: 103.820 }, sw: { lat: 1.290, lng: 103.700 } },
+  { ne: { lat: 1.360, lng: 103.880 }, sw: { lat: 1.290, lng: 103.820 } },
+  { ne: { lat: 1.360, lng: 103.960 }, sw: { lat: 1.290, lng: 103.880 } },
+];
+
+// --- Dish queries (48) ---
+const DISH_QUERIES = [
+  // Rice / Roast
+  "Chicken Rice", "Duck Rice", "Roast Meat Rice", "Hainanese Curry Rice", "Claypot Rice", "Economic Rice", "Teochew Porridge",
+  // Noodles
+  "Wanton Mee", "Bak Chor Mee", "Fishball Noodles", "Prawn Noodles", "Laksa", "Char Kway Teow", "Hokkien Mee", "Lor Mee", "Ban Mian", "Kway Chap", "Yong Tau Foo",
+  // Muslim / Malay / Indian Muslim
+  "Muslim", "Nasi Briyani", "Nasi Padang", "Ayam Penyet", "Satay", "Indian Rojak", "Roti Prata",
+  // Western & Others
+  "Western Food", "Fried Carrot Cake",
+  // Snacks / Vegetarian / Dessert
+  "Chinese Rojak", "Popiah", "Vegetarian Bee Hoon", "Thunder Tea Rice", "Kaya Toast", "Ice Kachang", "Cendol", "Tau Huay",
+  // International & Regional
+  "Sushi", "Ramen", "Thai Food", "Korean Food", "Vietnamese Food", "Indonesian Food", "Dim Sum", "Zi Char", "Pizza", "Fried Chicken", "Fish Soup", "Mala", "Japanese Food"
+];
+
+// Halal “guarantee” dish names (always flag halal if these substrings appear)
+const HALAL_GUARANTEE_TERMS = [
+  "muslim", "nasi briyani", "nasi biryani", "nasi padang", "ayam penyet", "indian rojak", "roti prata"
+];
+
+// Queries that should run WITHOUT strict type filtering (broad catch-net for halal)
+const NO_STRICT_TYPE_QUERIES = new Set([
+  "Muslim", "Nasi Briyani", "Nasi Padang", "Ayam Penyet", "Indian Rojak", "Roti Prata"
+]);
+
 const priceLevelMap = {
   PRICE_LEVEL_UNSPECIFIED: '$',
   PRICE_LEVEL_FREE: 'Free',
@@ -45,29 +87,49 @@ const priceLevelMap = {
   PRICE_LEVEL_VERY_EXPENSIVE: '$$$$'
 };
 
-const allQueries = [
-  'best chicken rice Singapore', 'best char kway teow Singapore', 'best laksa Singapore',
-  'best hokkien mee Singapore', 'best bak chor mee Singapore', 'best satay Singapore',
-  'best wanton mee Singapore', 'best chilli crab Singapore', 'best nasi lemak Singapore',
-  'best roti prata Singapore', 'halal restaurants Singapore', 'vegetarian restaurants Singapore',
-  'vegan restaurants Singapore', 'best bak kut teh Singapore', 'best fish head curry Singapore',
-  'best kaya toast Singapore', 'best hainanese curry rice Singapore',
-  'japanese restaurants Singapore', 'italian restaurants Singapore',
-  'best desserts Singapore', 'michelin star restaurants Singapore',
-  'restaurants in Orchard Road', 'best food in Katong',
-  'hawker centres near Raffles Place', 'cafes in Tiong Bahru'
-];
-const searchQueries = allQueries.slice(0, CONFIG.maxQueries);
-const MAX_PAGES_PER_QUERY = CONFIG.maxPages;
-
-// --- Helpers ---
+// Helpers
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
+
 const inferDietaryInfo = (place) => {
-  const text = `${place.displayName?.text || ''} ${(place.types || []).join(' ')}`.toLowerCase();
-  return {
-    isHalal: /\b(halal|muslim)\b/.test(text),
-    isVegetarian: /\b(vegetarian|vegan|plant-based)\b/.test(text)
+  const name = place.displayName?.text || '';
+  const typesText = (place.types || []).join(' ');
+  const address = place.formattedAddress || '';
+  const haystack = `${name} ${typesText} ${address}`.toLowerCase();
+
+  const isHalal =
+    /\b(halal|muslim)\b/.test(haystack) ||
+    HALAL_GUARANTEE_TERMS.some(term => haystack.includes(term));
+
+  const isVegetarian =
+    /\b(vegetarian|vegan|plant[- ]?based)\b/.test(haystack) ||
+    /lei\s*cha|thunder\s*tea/i.test(name);
+
+  return { isHalal, isVegetarian };
+};
+
+const buildRequestBody = ({
+  textQuery,
+  tile,
+  pageToken,
+  includedType,
+  strictTypeFiltering
+}) => {
+  const body = {
+    textQuery,
+    languageCode: "en-SG",
+    regionCode: "SG",
+    pageSize: 20,
+    locationRestriction: {
+      rectangle: {
+        high: { latitude: tile.ne.lat, longitude: tile.ne.lng },
+        low:  { latitude: tile.sw.lat, longitude: tile.sw.lng }
+      }
+    }
   };
+  if (pageToken) body.pageToken = pageToken;
+  if (includedType) body.includedType = includedType;
+  if (typeof strictTypeFiltering === 'boolean') body.strictTypeFiltering = strictTypeFiltering;
+  return body;
 };
 
 async function seedDatabase() {
@@ -79,13 +141,11 @@ async function seedDatabase() {
   try {
     client = await pool.connect();
 
-    // --- Ensure schema is correct (prod DB may not have these yet) ---
+    // Ensure schema
     await client.query(`
-      -- Add the column if missing
       ALTER TABLE public.eateries
         ADD COLUMN IF NOT EXISTS place_id text;
 
-      -- Drop unique constraint on "name" if it exists (branches can share names)
       DO $$
       BEGIN
         ALTER TABLE public.eateries DROP CONSTRAINT eateries_name_key;
@@ -93,7 +153,6 @@ async function seedDatabase() {
         NULL;
       END$$;
 
-      -- Ensure unique index on place_id (for deduplication)
       CREATE UNIQUE INDEX IF NOT EXISTS eateries_place_id_key
         ON public.eateries(place_id);
     `);
@@ -107,77 +166,96 @@ async function seedDatabase() {
       console.log("Production mode: skipping TRUNCATE (appending new rows).");
     }
 
-    for (const query of searchQueries) {
-      console.log(`\n--- Query: "${query}" ---`);
-      let nextPageToken = null;
-      let pageCount = 0;
-      let insertedCount = 0;
-      let dupedCount = 0;
+    // Headers
+    const headers = {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': API_KEY,
+      'X-Goog-FieldMask': FIELD_MASK
+    };
 
-      do {
-        pageCount++;
-        console.log(` -> Page ${pageCount}/${MAX_PAGES_PER_QUERY}`);
+    // Main loops: dish -> tile -> (type pass) -> pages
+    for (const dish of DISH_QUERIES) {
+      console.log(`\n==== Dish query: "${dish}" ====`);
+      let dishInserted = 0, dishDuped = 0;
 
-        const requestBody = { textQuery: query, pageSize: 20, ...(nextPageToken ? { pageToken: nextPageToken } : {}) };
-        const headers = {
-          'Content-Type': 'application/json',
-          'X-Goog-Api-Key': API_KEY,
-          'X-Goog-FieldMask': FIELD_MASK
-        };
+      for (const tile of SG_TILES) {
+        // Decide filtering strategy
+        const passes = NO_STRICT_TYPE_QUERIES.has(dish)
+          ? [{ includedType: null, strictTypeFiltering: false }]
+          : [
+              { includedType: "restaurant",    strictTypeFiltering: true  },
+              { includedType: "meal_takeaway", strictTypeFiltering: true  }
+            ];
 
-        const res = await axios.post(PLACES_API_NEW_URL, requestBody, { headers });
-        const places = res.data?.places || [];
-        nextPageToken = res.data?.nextPageToken;
+        for (const pass of passes) {
+          let nextPageToken = null;
+          let pageCount = 0;
 
-        if (!places.length) break;
+          do {
+            pageCount++;
+            const requestBody = buildRequestBody({
+              textQuery: dish,
+              tile,
+              pageToken: nextPageToken,
+              includedType: pass.includedType,
+              strictTypeFiltering: pass.strictTypeFiltering
+            });
 
-        for (const place of places) {
-          const photos = (place.photos || []).map((p) => ({ name: p.name }));
-          const { isHalal, isVegetarian } = inferDietaryInfo(place);
+            const res = await axios.post(PLACES_API_NEW_URL, requestBody, { headers });
+            const places = res.data?.places || [];
+            nextPageToken = res.data?.nextPageToken;
 
-          const eatery = {
-            place_id: place.id,
-            name: place.displayName?.text,
-            cuisine:
-              place.types?.[0]?.replace(/_/g, ' ')?.replace(/\b\w/g, (l) => l.toUpperCase()) || 'Restaurant',
-            neighbourhood: place.formattedAddress?.split(',').slice(-2)[0]?.trim() || 'Singapore',
-            rating: place.rating || 0,
-            review_count: place.userRatingCount || 0,
-            price: priceLevelMap[place.priceLevel] || '$',
-            photos: JSON.stringify(photos),
-            latitude: place.location?.latitude,
-            longitude: place.location?.longitude,
-            is_halal: isHalal,
-            is_vegetarian: isVegetarian
-          };
+            if (!places.length) break;
 
-          const insertQuery = `
-            INSERT INTO public.eateries (
-              place_id, name, cuisine, neighbourhood, rating, review_count, price,
-              photos, latitude, longitude, is_halal, is_vegetarian, updated_at
-            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,CURRENT_TIMESTAMP)
-            ON CONFLICT (place_id) DO NOTHING;
-          `;
-          const values = [
-            eatery.place_id, eatery.name, eatery.cuisine, eatery.neighbourhood,
-            eatery.rating, eatery.review_count, eatery.price, eatery.photos,
-            eatery.latitude, eatery.longitude, eatery.is_halal, eatery.is_vegetarian
-          ];
+            for (const place of places) {
+              const photos = (place.photos || []).map((p) => ({ name: p.name }));
+              const { isHalal, isVegetarian } = inferDietaryInfo(place);
 
-        const result = await client.query(insertQuery, values);
-          if (result.rowCount > 0) {
-            insertedCount++; totalInserted++;
-          } else {
-            dupedCount++; totalDuped++;
-          }
+              const eatery = {
+                place_id: place.id,
+                name: place.displayName?.text,
+                cuisine:
+                  place.types?.[0]?.replace(/_/g, ' ')?.replace(/\b\w/g, (l) => l.toUpperCase()) || 'Restaurant',
+                neighbourhood: place.formattedAddress?.split(',').slice(-2)[0]?.trim() || 'Singapore',
+                rating: place.rating || 0,
+                review_count: place.userRatingCount || 0,
+                price: priceLevelMap[place.priceLevel] || '$',
+                photos: JSON.stringify(photos),
+                latitude: place.location?.latitude,
+                longitude: place.location?.longitude,
+                is_halal: isHalal,
+                is_vegetarian: isVegetarian
+              };
+
+              const insertQuery = `
+                INSERT INTO public.eateries (
+                  place_id, name, cuisine, neighbourhood, rating, review_count, price,
+                  photos, latitude, longitude, is_halal, is_vegetarian, updated_at
+                ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,CURRENT_TIMESTAMP)
+                ON CONFLICT (place_id) DO NOTHING;
+              `;
+              const values = [
+                eatery.place_id, eatery.name, eatery.cuisine, eatery.neighbourhood,
+                eatery.rating, eatery.review_count, eatery.price, eatery.photos,
+                eatery.latitude, eatery.longitude, eatery.is_halal, eatery.is_vegetarian
+              ];
+
+              const result = await client.query(insertQuery, values);
+              if (result.rowCount > 0) { dishInserted++; totalInserted++; }
+              else { dishDuped++; totalDuped++; }
+            }
+
+            if (nextPageToken && pageCount < CONFIG.maxPages) {
+              await delay(CONFIG.perPageDelayMs);
+            }
+          } while (nextPageToken && pageCount < CONFIG.maxPages);
+
+          // brief spacing between calls to avoid rate limits
+          await delay(CONFIG.betweenCallsMs);
         }
+      }
 
-        if (nextPageToken && pageCount < MAX_PAGES_PER_QUERY) {
-          await delay(2000);
-        }
-      } while (nextPageToken && pageCount < MAX_PAGES_PER_QUERY);
-
-      console.log(`Inserted: ${insertedCount}, Duplicates skipped: ${dupedCount}`);
+      console.log(`Inserted for "${dish}": ${dishInserted}, Duplicates skipped: ${dishDuped}`);
     }
 
     console.log(`\n=== SEED COMPLETE ===`);
