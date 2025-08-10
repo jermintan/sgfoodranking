@@ -1,4 +1,4 @@
-// FILE: server/index.js (CLEAN + WORKING)
+// FILE: server/index.js (GLOBAL SORT + CLEAN)
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -18,12 +18,12 @@ const pool = new Pool({
 });
 
 // ---- API: Eateries (list) ----
-// --- API ENDPOINTS ---
 app.get('/api/eateries', async (req, res) => {
   try {
     // 1) Parse & normalize inputs
     const page  = Math.max(parseInt(req.query.page, 10)  || 1, 1);
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 50);
+    const sort  = String(req.query.sort || 'rating_desc').toLowerCase(); // rating_desc | reviews_desc | name_asc | distance_asc
 
     const {
       is_halal,
@@ -32,17 +32,16 @@ app.get('/api/eateries', async (req, res) => {
       price,
       latitude,
       longitude,
-      radius      // expect kilometers
+      radius // km
     } = req.query;
 
     const offset = (page - 1) * limit;
 
-    // 2) Build WHERE safely
+    // 2) WHERE clause
     const where = [];
     const vals  = [];
     let p = 1;
 
-    // filters
     if (is_halal === 'true') {
       where.push(`is_halal = $${p++}`);
       vals.push(true);
@@ -56,7 +55,6 @@ app.get('/api/eateries', async (req, res) => {
       vals.push(price);
     }
 
-    // search (make sure it never creates WHERE ())
     if (searchTerm && searchTerm.trim() !== '') {
       const like = `%${searchTerm.trim()}%`;
       where.push(`(name ILIKE $${p} OR cuisine ILIKE $${p + 1} OR neighbourhood ILIKE $${p + 2})`);
@@ -64,7 +62,7 @@ app.get('/api/eateries', async (req, res) => {
       p += 3;
     }
 
-    // location
+    // Location filter
     const userLat = Number(latitude);
     const userLng = Number(longitude);
     const radiusKm = Number(radius);
@@ -75,7 +73,7 @@ app.get('/api/eateries', async (req, res) => {
       radiusKm > 0;
 
     if (hasLocation) {
-      // Bind lat/lng/radius as params (don’t inline numbers)
+      // keep results within radius (km)
       where.push(`haversine_distance($${p}, $${p + 1}, latitude, longitude) <= $${p + 2}`);
       vals.push(userLat, userLng, radiusKm);
       p += 3;
@@ -89,15 +87,21 @@ app.get('/api/eateries', async (req, res) => {
     const totalItems = countRows[0]?.cnt ?? 0;
     const totalPages = Math.max(Math.ceil(totalItems / limit), 1);
 
-    // 4) Data query
-    // If we have location filtering, add distance & sort by distance then rating
+    // 4) Data query (GLOBAL ORDER BY, then LIMIT/OFFSET)
     const selectDistance = hasLocation
       ? `, haversine_distance($${p}, $${p + 1}, latitude, longitude) AS distance`
       : `, NULL AS distance`;
 
-    const orderSQL = hasLocation
-      ? `ORDER BY distance ASC, rating DESC, name ASC`
-      : `ORDER BY rating DESC, name ASC`;
+    // order map (safe, fixed strings)
+    const SORTS = {
+      rating_desc:  'rating DESC NULLS LAST, review_count DESC NULLS LAST, name ASC',
+      reviews_desc: 'review_count DESC NULLS LAST, rating DESC NULLS LAST, name ASC',
+      name_asc:     'name ASC, rating DESC NULLS LAST, review_count DESC NULLS LAST',
+      distance_asc: hasLocation
+        ? 'distance ASC, rating DESC NULLS LAST, name ASC'
+        : 'rating DESC NULLS LAST, name ASC'
+    };
+    const orderBy = SORTS[sort] || SORTS.rating_desc;
 
     const dataVals = hasLocation
       ? [...vals, userLat, userLng, limit, offset]
@@ -109,9 +113,9 @@ app.get('/api/eateries', async (req, res) => {
              ${selectDistance}
       FROM eateries
       ${whereSQL}
-      ${orderSQL}
+      ORDER BY ${orderBy}
       LIMIT $${hasLocation ? p + 2 : p}
-      OFFSET $${hasLocation ? p + 3 : p + 1}
+      OFFSET $${hasLocation ? p + 3 : p + 1};
     `;
 
     const { rows } = await pool.query(dataSQL, dataVals);
@@ -139,7 +143,6 @@ app.get('/api/eateries', async (req, res) => {
   }
 });
 
-
 // ---- API: Single eatery ----
 app.get('/api/eateries/:id', async (req, res) => {
   try {
@@ -165,11 +168,10 @@ app.get('/api/photo', (req, res) => {
   if (!key) return res.status(500).send('Maps API key not configured');
 
   const url = `https://places.googleapis.com/v1/${name}/media?maxHeightPx=${h}&key=${key}`;
-  // Simple, reliable: redirect to Google Places media
   return res.redirect(302, url);
 });
 
-// ---- Static serving (ONE block) ----
+// ---- Static serving ----
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '../build')));
   app.get('*', (req, res) => {

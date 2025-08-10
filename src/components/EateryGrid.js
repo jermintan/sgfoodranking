@@ -18,29 +18,26 @@ const EateryGrid = () => {
     isHalal: false,
     isVegetarian: false,
   });
-  const [sortOrder, setSortOrder] = useState('default');
+  const [sortOrder, setSortOrder] = useState('default'); // 'default' | 'reviews' | 'name'
   const [locationFilter, setLocationFilter] = useState(null); // { lat, lon, radius }
   const [locationStatus, setLocationStatus] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
-  // Refs to detect changes
   const prevDebouncedSearchTermRef = useRef(debouncedSearchTerm);
   const prevActiveFiltersRef = useRef(activeFilters);
   const prevLocationFilterRef = useRef(locationFilter);
+  const prevSortOrderRef = useRef(sortOrder);
 
-  // Debounce search term
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearchTerm(searchTerm), 500);
     return () => clearTimeout(t);
   }, [searchTerm]);
 
-  // Compute API base once
   const API_BASE_URL =
     process.env.NODE_ENV === 'production'
       ? (process.env.REACT_APP_API_URL || window.location.origin)
       : 'http://localhost:3001';
 
-  // Fetch eateries
   const fetchEateries = useCallback(
     async (pageToFetch = 1) => {
       setIsLoading(true);
@@ -48,6 +45,14 @@ const EateryGrid = () => {
       const q = new URLSearchParams();
       q.set('page', String(pageToFetch));
       q.set('limit', String(eateriesData.itemsPerPage));
+
+      // map UI sort → API sort
+      const sortMap = {
+        default: 'rating_desc',
+        reviews: 'reviews_desc',
+        name: 'name_asc',
+      };
+      q.set('sort', sortMap[sortOrder] || 'rating_desc');
 
       if (activeFilters.isHalal) q.set('is_halal', 'true');
       if (activeFilters.isVegetarian) q.set('is_vegetarian', 'true');
@@ -57,7 +62,6 @@ const EateryGrid = () => {
         q.set('searchTerm', debouncedSearchTerm.trim());
       }
 
-      // Location params
       if (locationFilter) {
         const { lat, lon, radius } = locationFilter;
         const latN = Number(lat);
@@ -76,7 +80,7 @@ const EateryGrid = () => {
         const data = await resp.json();
 
         setEateriesData(prev => ({
-          list: data.eateries || [],
+          list: (data.eateries ?? data.list) || [],
           currentPage: data.currentPage || 1,
           totalPages: data.totalPages || 0,
           itemsPerPage: data.itemsPerPage || prev.itemsPerPage,
@@ -88,24 +92,25 @@ const EateryGrid = () => {
         setIsLoading(false);
       }
     },
-    [API_BASE_URL, activeFilters, debouncedSearchTerm, eateriesData.itemsPerPage, locationFilter]
+    [API_BASE_URL, activeFilters, debouncedSearchTerm, eateriesData.itemsPerPage, locationFilter, sortOrder]
   );
 
-  // React to changes (search/filters/location/page)
   useEffect(() => {
-    const searchChanged = debouncedSearchTerm !== prevDebouncedSearchTermRef.current;
+    const searchChanged  = debouncedSearchTerm !== prevDebouncedSearchTermRef.current;
     const filtersChanged = JSON.stringify(activeFilters) !== JSON.stringify(prevActiveFiltersRef.current);
-    const locChanged = JSON.stringify(locationFilter) !== JSON.stringify(prevLocationFilterRef.current);
+    const locChanged     = JSON.stringify(locationFilter) !== JSON.stringify(prevLocationFilterRef.current);
+    const sortChanged    = sortOrder !== prevSortOrderRef.current;
 
     let pageToFetch = eateriesData.currentPage;
     let reset = false;
 
-    if (searchChanged || filtersChanged || locChanged) {
+    if (searchChanged || filtersChanged || locChanged || sortChanged) {
       pageToFetch = 1;
       reset = true;
       prevDebouncedSearchTermRef.current = debouncedSearchTerm;
       prevActiveFiltersRef.current = activeFilters;
       prevLocationFilterRef.current = locationFilter;
+      prevSortOrderRef.current = sortOrder;
     }
 
     fetchEateries(pageToFetch);
@@ -113,7 +118,7 @@ const EateryGrid = () => {
     if (reset && eateriesData.currentPage !== 1) {
       setEateriesData(prev => ({ ...prev, currentPage: 1 }));
     }
-  }, [debouncedSearchTerm, activeFilters, locationFilter, eateriesData.currentPage, fetchEateries]);
+  }, [debouncedSearchTerm, activeFilters, locationFilter, sortOrder, eateriesData.currentPage, fetchEateries]);
 
   const handleApplyFilters = newFilters => setActiveFilters(newFilters);
 
@@ -132,7 +137,6 @@ const EateryGrid = () => {
     setLocationStatus('Getting your location...');
     navigator.geolocation.getCurrentPosition(
       pos => {
-        // choose any default radius (km). 2km is a friendly default.
         const updated = { lat: pos.coords.latitude, lon: pos.coords.longitude, radius: 2 };
         setLocationFilter(updated);
         setLocationStatus('');
@@ -149,17 +153,8 @@ const EateryGrid = () => {
     setLocationStatus('');
   };
 
-  const processedEateries = useMemo(() => {
-    let list = [...eateriesData.list];
-    if (sortOrder !== 'default') {
-      list = [...list].sort((a, b) => {
-        if (sortOrder === 'reviews') return (b.review_count || 0) - (a.review_count || 0);
-        if (sortOrder === 'name') return (a.name || '').localeCompare(b.name || '');
-        return 0;
-      });
-    }
-    return list;
-  }, [eateriesData.list, sortOrder]);
+  // server now returns globally-sorted data; no client-side resorting
+  const processedEateries = useMemo(() => eateriesData.list, [eateriesData.list]);
 
   return (
     <>
@@ -199,7 +194,7 @@ const EateryGrid = () => {
         ) : processedEateries.length > 0 ? (
           <div className="eatery-grid">
             {processedEateries.map(eatery => (
-              <ListingCard key={eatery.id || eatery.name} eatery={eatery} />
+              <ListingCard key={eatery.id || eatery.place_id || eatery.name} eatery={eatery} />
             ))}
           </div>
         ) : (
